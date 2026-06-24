@@ -497,7 +497,7 @@ end
 
 local function estimatePathDistance(fromPos, toPos)
 	local path = PathfindingService:CreatePath({
-		AgentRadius = 6,
+		AgentRadius = 9,
 		AgentHeight = 6,
 		AgentCanJump = true,
 		AgentJumpHeight = 45,
