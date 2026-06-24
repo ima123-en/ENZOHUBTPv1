@@ -528,33 +528,22 @@ local function getBaseForPlot(plotName, brainPos)
 	if plotName and PLOT_TO_BASE[plotName] then
 		return PLOT_TO_BASE[plotName]
 	end
-	local plots = Workspace:FindFirstChild("Plots")
-	if not plots then return nil end
-	local plot = plots:FindFirstChild(plotName)
-	if not plot then return nil end
-	local plotPos = plot:GetPivot().Position
-	local bestName
+	if not brainPos then return nil end
+	local bestBase
 	local minDist = math.huge
 	for baseName, pts in pairs(BASE_POINTS) do
-		local sumPos = Vector3.new(0, 0, 0)
-		local count = 0
 		for _, pt in ipairs(pts) do
-			sumPos += pt.pos
-			count += 1
-		end
-		if count > 0 then
-			local center = sumPos / count
-			local d = (center - plotPos).Magnitude
+			local d = (pt.pos - brainPos).Magnitude
 			if d < minDist then
 				minDist = d
-				bestName = baseName
+				bestBase = baseName
 			end
 		end
 	end
-	if plotName and bestName then
-		PLOT_TO_BASE[plotName] = bestName
+	if plotName and bestBase then
+		PLOT_TO_BASE[plotName] = bestBase
 	end
-	return bestName
+	return bestBase
 end
 
 local function getBestBasePointInBase(brainBaseName, brainPos)
