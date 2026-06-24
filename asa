@@ -45,11 +45,11 @@ local REAL_TOOL_NAMES = {
 
 local BASE_POINTS = {
 	Base1 = {
-		{pos = Vector3.new(-335.880, -5.310, -74.769), look = Vector3.new( 1.000, 0.000,  0.000)},
-		{pos = Vector3.new(-335.120, 14.655, -75.024), look = Vector3.new( 1.000, 0.000,  0.000)},
-		{pos = Vector3.new(-340.500, 18,     -100.790), look = Vector3.new(-1.000, 0.000,  0.050)},
-		{pos = Vector3.new(-342.800, -4.645, -100.723), look = Vector3.new( 1.000, 0.000,  0.000)},
-	},
+    {pos = Vector3.new(-335.880, -5.310, -74.769),  look = Vector3.new(-0.002, 0.000, -1.000)},
+    {pos = Vector3.new(-335.120, 14.655, -75.024),  look = Vector3.new( 0.055, 0.000, -0.998)},
+    {pos = Vector3.new(-340.500, 18,     -100.790), look = Vector3.new(-0.999,-0.000,  0.046)},
+    {pos = Vector3.new(-342.800, -4.645, -100.723), look = Vector3.new(-1.000,-0.000, -0.002)},
+},
 	Base2 = {
 		{pos = Vector3.new(-335.548, -5.310, -18.819), look = Vector3.new( 0.001,-0.000,  1.000)},
 		{pos = Vector3.new(-335.968, 14.655, -18.763), look = Vector3.new(-0.009,-0.000,  1.000)},
