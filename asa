@@ -734,50 +734,52 @@ local function doCloneUnified()
 end
 
 local function performFinalFix(hrp, hum, destPos, facingDir)
-	if not hrp or not hrp.Parent then return end
-	local preStopDist = 1
-	local dashDist    = 2
-	local preStopPos = destPos - (facingDir.Unit * preStopDist)
-	local arriveDist = 0.5
-	local speed      = 150
-	local flying     = true
-	local conn
-	conn = RunService.Heartbeat:Connect(function()
-		if not hrp or not hrp.Parent then
-			flying = false
-			return
-		end
-		local diff = preStopPos - hrp.Position
-		if diff.Magnitude < arriveDist then
-			flying = false
-			return
-		end
-		hrp.AssemblyLinearVelocity = diff.Unit * speed
-	end)
-	while flying do task.wait() end
-	if conn then conn:Disconnect() end
-	vZeroLocal(hrp)
-	hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facingDir)
-	task.wait(0.02)
-	if hum then
-		hum:ChangeState(Enum.HumanoidStateType.Jumping)
-	end
-	hrp.AssemblyLinearVelocity = Vector3.new(0, 55, 0)
-	task.wait(0.08)
-	local steps  = 12
-	local startP = hrp.Position
-	local targetP = startP + facingDir.Unit * dashDist
-	local diff = targetP - startP
-	for i = 1, steps do
-		if not hrp or not hrp.Parent then break end
-		local alpha = i / steps
-		local nextP = startP + (diff * alpha)
-		hrp.CFrame = CFrame.new(nextP, nextP + facingDir)
-		vZeroLocal(hrp)
-		task.wait(0.01)
-	end
-	hrp.CFrame = CFrame.new(targetP, targetP + facingDir)
-	vZeroLocal(hrp)
+    if not hrp or not hrp.Parent then return end
+    
+    local preStopDist = 1.5
+    local preStopPos = destPos - (facingDir.Unit * preStopDist)
+    local arriveDist = 1.0
+    local speed = 130
+    
+    local flying = true
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if not hrp or not hrp.Parent then
+            flying = false
+            return
+        end
+        local diff = preStopPos - hrp.Position
+        if diff.Magnitude < arriveDist then
+            flying = false
+            return
+        end
+        hrp.AssemblyLinearVelocity = diff.Unit * speed
+    end)
+
+    local t_fly = tick()
+    while flying and tick() - t_fly < 2 do task.wait() end
+    if conn then conn:Disconnect() end
+    
+    vZeroLocal(hrp)
+    hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facingDir)
+    task.wait(0.05)
+
+    if hum then
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 32, 0) 
+    end
+    task.wait(0.05)
+
+    local dashForce = facingDir.Unit * 85
+    hrp.AssemblyLinearVelocity = Vector3.new(dashForce.X, 20, dashForce.Z)
+
+    task.wait(0.12)
+
+    vZeroLocal(hrp)
+    hrp.Anchored = true
+    task.wait(0.05)
+    hrp.Anchored = false
+    vZeroLocal(hrp)
 end
 
 local function finalSnap(hrp, targetPos)
