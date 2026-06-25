@@ -45,11 +45,11 @@ local REAL_TOOL_NAMES = {
 
 local BASE_POINTS = {
 	Base1 = {
-    {pos = Vector3.new(-335.880, -5.310, -74.769),  look = Vector3.new(-0.002, 0.000, -1.000)},
-    {pos = Vector3.new(-335.120, 14.655, -75.024),  look = Vector3.new( 0.055, 0.000, -0.998)},
-    {pos = Vector3.new(-340.500, 18,     -100.790), look = Vector3.new(-0.999,-0.000,  0.046)},
-    {pos = Vector3.new(-342.800, -4.645, -100.723), look = Vector3.new(-1.000,-0.000, -0.002)},
-},
+		{pos = Vector3.new(-335.880, -5.310, -74.769),  look = Vector3.new(-0.002, 0.000, -1.000)},
+		{pos = Vector3.new(-335.120, 14.655, -75.024),  look = Vector3.new( 0.055, 0.000, -0.998)},
+		{pos = Vector3.new(-340.500, 18,     -100.790), look = Vector3.new(-0.999,-0.000,  0.046)},
+		{pos = Vector3.new(-342.800, -4.645, -100.723), look = Vector3.new(-1.000,-0.000, -0.002)},
+	},
 	Base2 = {
 		{pos = Vector3.new(-335.548, -5.310, -18.819), look = Vector3.new( 0.001,-0.000,  1.000)},
 		{pos = Vector3.new(-335.968, 14.655, -18.763), look = Vector3.new(-0.009,-0.000,  1.000)},
@@ -734,52 +734,83 @@ local function doCloneUnified()
 end
 
 local function performFinalFix(hrp, hum, destPos, facingDir)
-    if not hrp or not hrp.Parent then return end
-    
-    local preStopDist = 1.5
-    local preStopPos = destPos - (facingDir.Unit * preStopDist)
-    local arriveDist = 1.0
-    local speed = 130
-    
-    local flying = true
-    local conn
-    conn = RunService.Heartbeat:Connect(function()
-        if not hrp or not hrp.Parent then
-            flying = false
-            return
-        end
-        local diff = preStopPos - hrp.Position
-        if diff.Magnitude < arriveDist then
-            flying = false
-            return
-        end
-        hrp.AssemblyLinearVelocity = diff.Unit * speed
-    end)
+	if not hrp or not hrp.Parent then return end
 
-    local t_fly = tick()
-    while flying and tick() - t_fly < 2 do task.wait() end
-    if conn then conn:Disconnect() end
-    
-    vZeroLocal(hrp)
-    hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facingDir)
-    task.wait(0.05)
+	local preStopDist = 1.5
+	local preStopPos = destPos - (facingDir.Unit * preStopDist)
+	local arriveDist = 1.0
+	local speed = 130
 
-    if hum then
-        hum:ChangeState(Enum.HumanoidStateType.Jumping)
-        hrp.AssemblyLinearVelocity = Vector3.new(0, 32, 0) 
-    end
-    task.wait(0.05)
+	local flying = true
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		if not hrp or not hrp.Parent then
+			flying = false
+			return
+		end
+		local diff = preStopPos - hrp.Position
+		if diff.Magnitude < arriveDist then
+			flying = false
+			return
+		end
+		hrp.AssemblyLinearVelocity = diff.Unit * speed
+	end)
 
-    local dashForce = facingDir.Unit * 85
-    hrp.AssemblyLinearVelocity = Vector3.new(dashForce.X, 20, dashForce.Z)
+	local t_fly = tick()
+	while flying and tick() - t_fly < 2 do task.wait() end
+	if conn then conn:Disconnect() end
 
-    task.wait(0.12)
+	vZeroLocal(hrp)
+	hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facingDir)
+	task.wait(0.05)
 
-    vZeroLocal(hrp)
-    hrp.Anchored = true
-    task.wait(0.05)
-    hrp.Anchored = false
-    vZeroLocal(hrp)
+	local head = hrp.Parent:FindFirstChild("Head")
+	local origin = head and head.Position or (hrp.Position + Vector3.new(0, 1.5, 0))
+	local rayParam = RaycastParams.new()
+	rayParam.FilterType = Enum.RaycastFilterType.Exclude
+	rayParam.FilterDescendantsInstances = {hrp.Parent}
+
+	local rayResult = workspace:Raycast(origin, facingDir.Unit * 5, rayParam)
+	local targetDashPos
+
+	if rayResult then
+		targetDashPos = rayResult.Position - (facingDir.Unit * 0.1)
+	else
+		targetDashPos = hrp.Position + (facingDir.Unit * 2.0)
+	end
+
+	if hum then
+		hum:ChangeState(Enum.HumanoidStateType.Jumping)
+		hrp.AssemblyLinearVelocity = Vector3.new(0, 32, 0) 
+	end
+	task.wait(0.05)
+
+	local dashSpeed = 100
+	local reached = false
+	local dashConn
+	dashConn = RunService.Heartbeat:Connect(function()
+		if not hrp or not hrp.Parent then
+			if dashConn then dashConn:Disconnect() end
+			return
+		end
+		local diff = targetDashPos - hrp.Position
+		if diff.Magnitude < 0.4 then
+			reached = true
+			return
+		end
+		hrp.AssemblyLinearVelocity = diff.Unit * dashSpeed
+	end)
+
+	local t_dash = tick()
+	while not reached and tick() - t_dash < 0.5 do task.wait() end
+	if dashConn then dashConn:Disconnect() end
+
+	vZeroLocal(hrp)
+	hrp.CFrame = CFrame.new(targetDashPos, targetDashPos + facingDir)
+	hrp.Anchored = true
+	task.wait(0.05)
+	hrp.Anchored = false
+	vZeroLocal(hrp)
 end
 
 local function finalSnap(hrp, targetPos)
@@ -1633,7 +1664,7 @@ local function makeSliderSettings(parent, y, labelText, minVal, maxVal, getValue
 			knob.Position = UDim2.new(0, px - 5, 0.5, -5)
 		else
 			TweenService:Create(fill, TweenInfo.new(0.1), {Size = UDim2.new(0, px, 1, 0)}):Play()
-			TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new(0, px - 5, 0.5, -5)}):Play()
+			TweenService:Create(GuiKnob, TweenInfo.new(0.1), {Position = UDim2.new(0, px - 5, 0.5, -5)}):Play()
 		end
 	end
 	local function setFromAlpha(alpha)
