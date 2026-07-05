@@ -10,6 +10,7 @@ local HttpService         = game:GetService("HttpService")
 local GuiService          = game:GetService("GuiService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local TweenService        = game:GetService("TweenService")
+local SoundService        = game:GetService("SoundService")
 
 local LP        = Players.LocalPlayer
 local PlayerGui = LP:WaitForChild("PlayerGui")
@@ -23,561 +24,474 @@ local AnimalsData   = require(Datas:WaitForChild("Animals"))
 local AnimalsShared = require(Shared:WaitForChild("Animals"))
 local PlayerMouse   = require(Packages:WaitForChild("PlayerMouse"))
 
-local core_spam = { remote = nil }
-task.spawn(function()
-	local net = ReplicatedStorage:WaitForChild("Packages", 5):WaitForChild("Net", 5)
-	if not net then return end
-	local ch = net:GetChildren()
-	local n2i = {}
-	for i, o in ipairs(ch) do n2i[o.Name] = i end
-	local a = n2i["RF/a0e78691-cb9b-4efc-ac08-9c06fea70059"]
-	if a and ch[a + 1] then core_spam.remote = ch[a + 1] end
-end)
-
 local SAVE_KEY = "ENZO_TP_PANEL_" .. LP.UserId
 
 local REAL_TOOL_NAMES = {
-	Carpet  = "Flying Carpet",
-	Grapple = "Grapple Hook",
-	Sleigh  = "Santa's Sleigh",
-	Wings   = "Wings",
+    Carpet  = "Flying Carpet",
+    Grapple = "Grapple Hook",
+    Sleigh  = "Santa's Sleigh",
+    Wings   = "Wings",
 }
 
-local BASE_POINTS = {
-	Base1 = {
-    {pos = Vector3.new(-335.880, -5.310, -74.769),  look = Vector3.new(-0.002, 0.000, -1.000)},
-    {pos = Vector3.new(-335.120, 14.655, -75.024),  look = Vector3.new( 0.055, 0.000, -0.998)},
-    {pos = Vector3.new(-340.500, 18,     -100.790), look = Vector3.new(-0.999,-0.000,  0.046)},
-    {pos = Vector3.new(-342.800, -4.645, -100.723), look = Vector3.new(-1.000,-0.000, -0.002)},
-},
-	Base2 = {
-		{pos = Vector3.new(-335.548, -5.310, -18.819), look = Vector3.new( 0.001,-0.000,  1.000)},
-		{pos = Vector3.new(-335.968, 14.655, -18.763), look = Vector3.new(-0.009,-0.000,  1.000)},
-		{pos = Vector3.new(-340.770, 18,        7.819), look = Vector3.new( 1.000, 0.000, -0.020)},
-		{pos = Vector3.new(-335.362, 14.655,  32.267), look = Vector3.new(-0.018, 0.000, -1.000)},
-		{pos = Vector3.new(-335.597, -5.310,  31.984), look = Vector3.new( 0.007,-0.000, -1.000)},
-		{pos = Vector3.new(-342.770, -4.545,   6.882), look = Vector3.new( 0.998, 0.000,  0.059)},
-	},
-	Base3 = {
-		{pos = Vector3.new(-335.056, -4.730,  88.361), look = Vector3.new(-0.053,-0.000,  0.999)},
-		{pos = Vector3.new(-335.484, 14.589,  88.365), look = Vector3.new( 0.009,-0.000,  1.000)},
-		{pos = Vector3.new(-340.686, 18,      113.545), look = Vector3.new( 0.996,-0.000,  0.091)},
-		{pos = Vector3.new(-334.037, 14.589, 138.982), look = Vector3.new( 0.016, 0.000, -1.000)},
-		{pos = Vector3.new(-334.729, -5.310, 138.934), look = Vector3.new(-0.018, 0.000, -1.000)},
-		{pos = Vector3.new(-342.976, -4.691, 114.290), look = Vector3.new( 1.000, 0.000, -0.003)},
-	},
-	Base4 = {
-		{pos = Vector3.new(-335.378, -5.310, 195.301), look = Vector3.new(-0.007, 0.000,  1.000)},
-		{pos = Vector3.new(-334.909, 14.589, 195.104), look = Vector3.new(-0.014,-0.000,  1.000)},
-		{pos = Vector3.new(-340.955, 18,      221.001), look = Vector3.new( 1.000, 0.000,  0.021)},
-		{pos = Vector3.new(-342.888, -4.610, 220.964), look = Vector3.new( 1.000, 0.000, -0.003)},
-	},
-	Base5 = {
-		{pos = Vector3.new(-484.222, -5.310, 195.304), look = Vector3.new( 0.028, 0.000,  1.000)},
-		{pos = Vector3.new(-484.333, 14.589, 195.090), look = Vector3.new(-0.021,-0.000,  1.000)},
-		{pos = Vector3.new(-478.365, 18,      220.752), look = Vector3.new(-1.000,-0.000,  0.006)},
-		{pos = Vector3.new(-476.401, -4.601, 220.614), look = Vector3.new(-1.000,-0.000,  0.019)},
-	},
-	Base6 = {
-		{pos = Vector3.new(-483.449, -5.310, 138.981), look = Vector3.new(-0.019,-0.000, -1.000)},
-		{pos = Vector3.new(-483.015, 14.655, 138.915), look = Vector3.new(-0.002,-0.000, -1.000)},
-		{pos = Vector3.new(-478.574, 18,      113.173), look = Vector3.new(-1.000,-0.000,  0.021)},
-		{pos = Vector3.new(-484.151, 14.655,  87.993), look = Vector3.new( 0.026,-0.000,  1.000)},
-		{pos = Vector3.new(-483.837, -5.310,  87.932), look = Vector3.new( 0.025, 0.000,  1.000)},
-		{pos = Vector3.new(-476.314, -4.545, 113.780), look = Vector3.new(-1.000, 0.000, -0.023)},
-	},
-	Base7 = {
-		{pos = Vector3.new(-483.090, -5.310,  32.215), look = Vector3.new(-0.027,-0.000, -1.000)},
-		{pos = Vector3.new(-483.202, 14.589,  32.072), look = Vector3.new( 0.027, 0.000, -1.000)},
-		{pos = Vector3.new(-478.055, 18,        6.638), look = Vector3.new(-1.000, 0.000, -0.004)},
-		{pos = Vector3.new(-483.909, 14.589, -19.057), look = Vector3.new(-0.008,-0.000,  1.000)},
-		{pos = Vector3.new(-482.949, -5.310, -19.079), look = Vector3.new(-0.025,-0.000,  1.000)},
-		{pos = Vector3.new(-476.441, -4.593,   6.513), look = Vector3.new(-1.000,-0.000,  0.006)},
-	},
-	Base8 = {
-		{pos = Vector3.new(-483.624, -5.310, -74.769), look = Vector3.new(-0.002, 0.000, -1.000)},
-		{pos = Vector3.new(-482.742, 14.655, -75.024), look = Vector3.new( 0.055, 0.000, -0.998)},
-		{pos = Vector3.new(-478.328, 18,     -100.790), look = Vector3.new(-0.999,-0.000,  0.046)},
-		{pos = Vector3.new(-476.109, -4.645,-100.723), look = Vector3.new(-1.000,-0.000, -0.002)},
-	},
+local CARPET_NAMES = { "Flying Carpet", "Santa's Sleigh", "Wings" }
+
+local BASES_LOW = {
+    [1]=Vector3.new(-476.52,-2,220.94),[2]=Vector3.new(-476.52,-2,113.77),
+    [3]=Vector3.new(-476.52,-2,6.18),[4]=Vector3.new(-476.52,-2,-101.07),
+    [5]=Vector3.new(-342.66,-2,221.45),[6]=Vector3.new(-342.66,-2,113.41),
+    [7]=Vector3.new(-342.66,-2,6.25),[8]=Vector3.new(-342.66,-2,-99.73),
 }
 
-local BASE_CENTERS = {}
-for baseName, list in pairs(BASE_POINTS) do
-	local sum = Vector3.new()
-	local n = 0
-	for _, e in ipairs(list) do
-		sum += e.pos
-		n += 1
-	end
-	if n > 0 then BASE_CENTERS[baseName] = sum / n end
-end
+local BASES_HIGH = {
+    [1]=Vector3.new(-479.51,18,220.94),[2]=Vector3.new(-479.51,18,113.77),
+    [3]=Vector3.new(-479.51,18,6.18),[4]=Vector3.new(-479.51,18,-101.07),
+    [5]=Vector3.new(-339.48,18,221.45),[6]=Vector3.new(-339.48,18,113.41),
+    [7]=Vector3.new(-339.48,18,6.25),[8]=Vector3.new(-339.48,18,-99.73),
+}
 
-local PLOT_TO_BASE = {}
+local _DIRS = { Vector3.new(1,0,0), Vector3.new(-1,0,0), Vector3.new(0,0,1), Vector3.new(0,0,-1) }
 
 local Config = {
-	TpSettings = {
-		Tool              = "Grapple Hook",
-		Speed             = 2,
-		TpKey             = "T",
-		CloneKey          = "V",
-		TpOnLoad          = false,
-		MinGenForTp       = "",
-		TeleportV2        = true,
-		TpJoinDelay       = 0,
-		LandingDelayV2    = 0.48,
-		TpMode            = "Front",
-		TpV2Speed         = 160,
-		TpGrappleSpeed    = 260,
-		TeleportMethod    = "Tween Teleport",
-		BaseSpeed100      = 80,
-		WalkToBrainrotSpd = 50,
-		CloneDelay        = 0.03,
-		TpToBrainrotMode  = "Velocity",
-		FixPosTime        = 0.1,
-		TpWaitDelay       = 0.5,
-	},
-	TpAfterHit    = false,
-	AutoTpOnLoad  = false,
-	GuiScale      = 50,
-	ToolChoice    = "Grapple",
-	TpSpeedIndex  = 2,
-	TeleportV2    = true,
-	GuiPos        = nil,
+    TpSettings = {
+        Tool              = "Grapple Hook",
+        Speed             = 2,
+        TpKey             = "T",
+        CloneKey          = "V",
+        TpOnLoad          = false,
+        MinGenForTp       = "",
+        TeleportV2        = true,
+        TpJoinDelay       = 0,
+        LandingDelayV2    = 0.48,
+        TpMode            = "Front",
+        TpV2Speed         = 160,
+        TpGrappleSpeed    = 260,
+        TeleportMethod    = "Tween Teleport",
+        BaseSpeed100      = 80,
+        WalkToBrainrotSpd = 190,
+        CloneDelay        = 0.03,
+        TpToBrainrotMode  = "Velocity",
+        FixPosTime        = 0.1,
+        TpWaitDelay       = 0.5,
+        PrioritySoundID   = "94302001673909",
+        PrioritySound     = true,
+    },
+    TpAfterHit    = false,
+    AutoTpOnLoad  = false,
+    GuiScale      = 50,
+    ToolChoice    = "Grapple",
+    TpSpeedIndex  = 2,
+    TeleportV2    = true,
+    GuiPos        = nil,
 }
 
 local function SaveConfig()
-	pcall(function()
-		if writefile then
-			local data = {
-				TpSettings   = Config.TpSettings,
-				TpAfterHit   = Config.TpAfterHit,
-				AutoTpOnLoad = Config.AutoTpOnLoad,
-				GuiScale     = Config.GuiScale,
-				ToolChoice   = Config.ToolChoice,
-				TpSpeedIndex = Config.TpSpeedIndex,
-				TeleportV2   = Config.TeleportV2,
-				GuiPos       = Config.GuiPos and {
-					ScaleX  = Config.GuiPos.X.Scale,
-					OffsetX = Config.GuiPos.X.Offset,
-					ScaleY  = Config.GuiPos.Y.Scale,
-					OffsetY = Config.GuiPos.Y.Offset,
-				} or nil,
-			}
-			writefile(SAVE_KEY .. ".json", HttpService:JSONEncode(data))
-		end
-	end)
+    pcall(function()
+        if writefile then
+            local data = {
+                TpSettings   = Config.TpSettings,
+                TpAfterHit   = Config.TpAfterHit,
+                AutoTpOnLoad = Config.AutoTpOnLoad,
+                GuiScale     = Config.GuiScale,
+                ToolChoice   = Config.ToolChoice,
+                TpSpeedIndex = Config.TpSpeedIndex,
+                TeleportV2   = Config.TeleportV2,
+                GuiPos       = Config.GuiPos and {
+                    ScaleX  = Config.GuiPos.X.Scale,
+                    OffsetX = Config.GuiPos.X.Offset,
+                    ScaleY  = Config.GuiPos.Y.Scale,
+                    OffsetY = Config.GuiPos.Y.Offset,
+                } or nil,
+            }
+            writefile(SAVE_KEY .. ".json", HttpService:JSONEncode(data))
+        end
+    end)
 end
 
 local function LoadConfig()
-	pcall(function()
-		if readfile and isfile and isfile(SAVE_KEY .. ".json") then
-			local data = HttpService:JSONDecode(readfile(SAVE_KEY .. ".json"))
-			if data.TpSettings then
-				for k,v in pairs(data.TpSettings) do Config.TpSettings[k] = v end
-			end
-			if data.TpAfterHit    ~= nil then Config.TpAfterHit    = data.TpAfterHit end
-			if data.AutoTpOnLoad  ~= nil then Config.AutoTpOnLoad  = data.AutoTpOnLoad end
-			if data.GuiScale      ~= nil then Config.GuiScale      = data.GuiScale end
-			if data.ToolChoice    ~= nil then Config.ToolChoice    = data.ToolChoice end
-			if data.TpSpeedIndex  ~= nil then Config.TpSpeedIndex  = data.TpSpeedIndex end
-			if data.TeleportV2    ~= nil then Config.TeleportV2    = data.TeleportV2 end
-			if data.GuiPos and data.GuiPos.ScaleX and data.GuiPos.ScaleY and data.GuiPos.OffsetX and data.GuiPos.OffsetY then
-				Config.GuiPos = UDim2.new(data.GuiPos.ScaleX, data.GuiPos.OffsetX, data.GuiPos.ScaleY, data.GuiPos.OffsetY)
-			end
-		end
-	end)
+    pcall(function()
+        if readfile and isfile and isfile(SAVE_KEY .. ".json") then
+            local data = HttpService:JSONDecode(readfile(SAVE_KEY .. ".json"))
+            if data.TpSettings then
+                for k,v in pairs(data.TpSettings) do Config.TpSettings[k] = v end
+            end
+            if data.TpAfterHit    ~= nil then Config.TpAfterHit    = data.TpAfterHit end
+            if data.AutoTpOnLoad  ~= nil then Config.AutoTpOnLoad  = data.AutoTpOnLoad end
+            if data.GuiScale      ~= nil then Config.GuiScale      = data.GuiScale end
+            if data.ToolChoice    ~= nil then Config.ToolChoice    = data.ToolChoice end
+            if data.TpSpeedIndex  ~= nil then Config.TpSpeedIndex  = data.TpSpeedIndex end
+            if data.TeleportV2    ~= nil then Config.TeleportV2    = data.TeleportV2 end
+            if data.GuiPos and data.GuiPos.ScaleX and data.GuiPos.ScaleY and data.GuiPos.OffsetX and data.GuiPos.OffsetY then
+                Config.GuiPos = UDim2.new(data.GuiPos.ScaleX, data.GuiPos.OffsetX, data.GuiPos.ScaleY, data.GuiPos.OffsetY)
+            end
+        end
+    end)
 end
 
 LoadConfig()
-if not Config.TpSettings.FixPosTime then Config.TpSettings.FixPosTime = 0.1 end
-if not Config.TpSettings.TpWaitDelay then Config.TpSettings.TpWaitDelay = 0.5 end
 
-local function GetCurrentTpToolName()
-	local choice = Config.ToolChoice or "Grapple"
-	local n = REAL_TOOL_NAMES[choice]
-	if not n then n = REAL_TOOL_NAMES.Grapple or "Grapple Hook" end
-	return n
-end
+_G.VanishCarpetSpeed = Config.TpSettings.TpV2Speed or 160
 
-local function getBrainrotPosUnified(sel)
-	if not sel then return nil end
-	if sel.worldPosition then return sel.worldPosition end
-	local plots = Workspace:FindFirstChild("Plots")
-	if plots and sel.plot and sel.slot then
-		local plot    = plots:FindFirstChild(sel.plot)
-		local podiums = plot and plot:FindFirstChild("AnimalPodiums")
-		local podium  = podiums and podiums:FindFirstChild(tostring(sel.slot))
-		if podium then
-			local ok, cf = pcall(function() return podium:GetPivot() end)
-			if ok then return cf.Position end
-		end
-	end
-	return nil
+local function getAllPriorityPets()
+    local out = {}
+    local plots = Workspace:FindFirstChild("Plots")
+    if not plots then return out end
+    for _, plot in ipairs(plots:GetChildren()) do
+        local ch = Synchronizer:Get(plot.Name)
+        if ch then
+            local al = ch:Get("AnimalList")
+            local owner = ch:Get("Owner")
+            local ownerName = owner and (owner.Name or owner) or nil
+            if al and ownerName and ownerName ~= LP.Name and ownerName ~= LP.DisplayName then
+                for slot, ad in pairs(al) do
+                    if type(ad) == "table" then
+                        local idx = ad.Index
+                        local info = AnimalsData[idx]
+                        if info then
+                            local mut = ad.Mutation or "None"
+                            local gv = AnimalsShared:GetGeneration(idx, ad.Mutation, ad.Traits, nil)
+                            local name = info.DisplayName or idx
+                            table.insert(out, {
+                                name      = name,
+                                index     = idx,
+                                genValue  = gv,
+                                owner     = ownerName,
+                                plot      = plot.Name,
+                                slot      = tostring(slot),
+                                mutation  = mut,
+                            })
+                        end
+                    end
+                end
+            end
+        end
+    end
+    table.sort(out, function(a,b) return (a.genValue or 0) > (b.genValue or 0) end)
+    return out
 end
 
 local function getPrioritySelected()
-	local ok, g = pcall(getgenv)
-	if ok and g and g.PrioritySystem and g.PrioritySystem.SelectedData then
-		return g.PrioritySystem.SelectedData
-	end
-	local plots = Workspace:FindFirstChild("Plots")
-	if not plots then return nil end
-	local bestSel, bestGen = nil, -1
-	for _, plot in ipairs(plots:GetChildren()) do
-		local podiums = plot:FindFirstChild("AnimalPodiums")
-		if podiums then
-			for _, podium in ipairs(podiums:GetChildren()) do
-				local animal = podium:FindFirstChild("Animal")
-				if animal and animal:IsA("Model") then
-					local name = animal.Name
-					local gen = 0
-					local okData, data = pcall(function() return AnimalsData[name] end)
-					if okData and type(data) == "table" and data.Generation then
-						gen = tonumber(tostring(data.Generation)) or 0
-					end
-					if gen > bestGen then
-						bestGen = gen
-						bestSel = { plot = plot.Name, slot = tonumber(podium.Name), petName = name }
-					end
-				end
-			end
-		end
-	end
-	return bestSel
+    local ok, g = pcall(getgenv)
+    if ok and g and g.PrioritySystem and g.PrioritySystem.SelectedData then
+        return g.PrioritySystem.SelectedData
+    end
+    local pets = getAllPriorityPets()
+    if pets[1] then
+        local p = pets[1]
+        return { plot = p.plot, slot = tonumber(p.slot), petName = p.name, worldPosition = nil, priorityPet = p }
+    end
+    return nil
+end
+
+local function getBrainrotPosUnified(sel)
+    if not sel then return nil end
+    if sel.worldPosition then return sel.worldPosition end
+    local plots = Workspace:FindFirstChild("Plots")
+    if plots and sel.plot and sel.slot then
+        local plot    = plots:FindFirstChild(sel.plot)
+        local podiums = plot and plot:FindFirstChild("AnimalPodiums")
+        local podium  = podiums and podiums:FindFirstChild(tostring(sel.slot))
+        if podium then
+            local ok, cf = pcall(function() return podium:GetPivot() end)
+            if ok then
+                local pos = cf.Position
+                sel.worldPosition = pos
+                return pos
+            end
+        end
+    end
+    return nil
 end
 
 local NetModule2
 local function loadNet()
-	if NetModule2 then return true end
-	local ok, mod = pcall(function()
-		return require(ReplicatedStorage:WaitForChild("Packages",5):WaitForChild("Net",5):FindFirstChildWhichIsA("ModuleScript",true))
-	end)
-	if not ok or type(mod) ~= "table" then return false end
-	NetModule2 = mod
-	return true
+    if NetModule2 then return true end
+    local ok, mod = pcall(function()
+        return require(ReplicatedStorage:WaitForChild("Packages",5):WaitForChild("Net",5):FindFirstChildWhichIsA("ModuleScript",true))
+    end)
+    if not ok or type(mod) ~= "table" then return false end
+    NetModule2 = mod
+    return true
 end
 
-_G.VanishFireGrapple = function()
-	if not NetModule2 then loadNet() end
-	if not NetModule2 then return end
-	local char = LP.Character
-	if not char then return end
-	if not char:FindFirstChild("Grapple Hook") then
-		local bp = LP:FindFirstChild("Backpack")
-		local tool = bp and bp:FindFirstChild("Grapple Hook")
-		local hum = char:FindFirstChildOfClass("Humanoid")
-		if tool and hum then pcall(function() hum:EquipTool(tool) end) end
-	end
-	if not char:FindFirstChild("Grapple Hook") then return end
-	pcall(function() NetModule2:RemoteEvent("UseItem"):FireServer(2) end)
+local function playPrioritySound()
+    if not Config.TpSettings.PrioritySound then return end
+    local sid = Config.TpSettings.PrioritySoundID or "94302001673909"
+    local idNum = sid:match("%d+")
+    if not idNum then return end
+    local s = Instance.new("Sound")
+    s.SoundId = "rbxassetid://"..idNum
+    s.Volume = 1
+    s.Parent = SoundService
+    s:Play()
+    game:GetService("Debris"):AddItem(s, 6)
 end
-
-_G.VanishCarpetSpeed = Config.TpSettings.TpV2Speed or 160
-local CARPET_NAMES = { "Flying Carpet", "Santa's Sleigh", "Wings" }
 
 local function findToolLocal(name)
-	local char = LP.Character
-	local bp = LP:FindFirstChild("Backpack")
-	return (char and char:FindFirstChild(name)) or (bp and bp:FindFirstChild(name))
+    local char = LP.Character
+    local bp = LP:FindFirstChild("Backpack")
+    return (char and char:FindFirstChild(name)) or (bp and bp:FindFirstChild(name))
+end
+
+local function GetCurrentTpToolName()
+    local choice = Config.ToolChoice or "Grapple"
+    local n = REAL_TOOL_NAMES[choice]
+    if not n then n = REAL_TOOL_NAMES.Grapple or "Grapple Hook" end
+    return n
 end
 
 local function equipSelectedTpTool()
-	local char = LP.Character
-	local hum = char and char:FindFirstChildOfClass("Humanoid")
-	if not hum then return nil end
-	local choice = Config.ToolChoice or "Grapple"
-	if choice == "Grapple" then
-		local t = findToolLocal("Grapple Hook")
-		if t and t:IsA("Tool") then
-			if t.Parent ~= char then pcall(function() hum:EquipTool(t) end) end
-			return "Grapple Hook"
-		end
-		return nil
-	else
-		local wantedName = REAL_TOOL_NAMES[choice] or "Flying Carpet"
-		local exact = findToolLocal(wantedName)
-		if exact and exact:IsA("Tool") then
-			if exact.Parent ~= char then pcall(function() hum:EquipTool(exact) end) end
-			return wantedName
-		end
-		for _, n in ipairs(CARPET_NAMES) do
-			local t = findToolLocal(n)
-			if t and t:IsA("Tool") then
-				if t.Parent ~= char then pcall(function() hum:EquipTool(t) end) end
-				return n
-			end
-		end
-	end
-	return nil
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return nil end
+    local choice = Config.ToolChoice or "Grapple"
+    if choice == "Grapple" then
+        local t = findToolLocal("Grapple Hook")
+        if t and t:IsA("Tool") then
+            if t.Parent ~= char then pcall(function() hum:EquipTool(t) end) end
+            return "Grapple Hook"
+        end
+        return nil
+    else
+        local wantedName = REAL_TOOL_NAMES[choice] or "Flying Carpet"
+        local exact = findToolLocal(wantedName)
+        if exact and exact:IsA("Tool") then
+            if exact.Parent ~= char then pcall(function() hum:EquipTool(exact) end) end
+            return wantedName
+        end
+        for _, n in ipairs(CARPET_NAMES) do
+            local t = findToolLocal(n)
+            if t and t:IsA("Tool") then
+                if t.Parent ~= char then pcall(function() hum:EquipTool(t) end) end
+                return n
+            end
+        end
+    end
+    return nil
 end
 
 local function equipAnyCarpet()
-	local char = LP.Character
-	local hum  = char and char:FindFirstChildOfClass("Humanoid")
-	if not hum then return nil end
-	for _, n in ipairs(CARPET_NAMES) do
-		local t = findToolLocal(n)
-		if t and t:IsA("Tool") then
-			if t.Parent ~= char then pcall(function() hum:EquipTool(t) end) end
-			return n
-		end
-	end
-	return nil
+    local char = LP.Character
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return nil end
+    for _, n in ipairs(CARPET_NAMES) do
+        local t = findToolLocal(n)
+        if t and t:IsA("Tool") then
+            if t.Parent ~= char then pcall(function() hum:EquipTool(t) end) end
+            return n
+        end
+    end
+    return nil
 end
 
-local ARRIVE = 3
-
 local function vZeroLocal(hrp)
-	if hrp then
-		hrp.AssemblyLinearVelocity = Vector3.zero
-		hrp.AssemblyAngularVelocity = Vector3.zero
-		hrp.Velocity                = Vector3.zero
-		hrp.RotVelocity             = Vector3.zero
-	end
+    if hrp then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        hrp.Velocity                = Vector3.zero
+        hrp.RotVelocity             = Vector3.zero
+    end
 end
 
 local STRUCT = { ["structure base home"] = true, ["Wall"] = true, ["Floor"] = true, ["Roof"] = true }
 local SKIP_NAME = {
-	["DeliveryHitbox"]=true, ["StealHitbox"]=true, ["LaserHitbox"]=true,
-	["AnimalTarget"]=true, ["Multiplier"]=true,  ["Laser"]=true, ["Hitbox"]=true,
-	["Spawn"]=true, ["MainRoot"]=true, ["SecondFloor"]=true, ["ThirdFloor"]=true, ["Slope"]=true
+    ["DeliveryHitbox"]=true, ["StealHitbox"]=true, ["LaserHitbox"]=true,
+    ["AnimalTarget"]=true, ["Multiplier"]=true,  ["Laser"]=true, ["Hitbox"]=true,
+    ["Spawn"]=true, ["MainRoot"]=true, ["SecondFloor"]=true, ["ThirdFloor"]=true, ["Slope"]=true
 }
 
 local function blocks(inst)
-	if not inst then return false end
-	if SKIP_NAME[inst.Name] then return false end
-	if inst.CanCollide then return true end
-	if STRUCT[inst.Name] then return true end
-	local s = inst.Size
-	if s and math.max(s.X * s.Y, s.X * s.Z, s.Y * s.Z) > 150 then return true end
-	return false
+    if not inst then return false end
+    if SKIP_NAME[inst.Name] then return false end
+    if inst.CanCollide then return true end
+    if STRUCT[inst.Name] then return true end
+    local s = inst.Size
+    if s and math.max(s.X * s.Y, s.X * s.Z, s.Y * s.Z) > 150 then return true end
+    return false
 end
 
 local function blockRay(origin, target)
-	local rp = RaycastParams.new()
-	rp.FilterType = Enum.RaycastFilterType.Exclude
-	rp.IgnoreWater = true
-	local skip = {}
-	for _, pl in ipairs(Players:GetPlayers()) do
-		if pl.Character then skip[#skip + 1] = pl.Character end
-	end
-	local o = origin
-	for _ = 1, 16 do
-		rp.FilterDescendantsInstances = skip
-		local d = target - o
-		if d.Magnitude < 0.05 then return nil end
-		local res = Workspace:Raycast(o, d, rp)
-		if not res then return nil end
-		if blocks(res.Instance) then return res end
-		skip[#skip + 1] = res.Instance
-		o = res.Position + d.Unit * 0.3
-	end
-	return nil
+    local rp = RaycastParams.new()
+    rp.FilterType = Enum.RaycastFilterType.Exclude
+    rp.IgnoreWater = true
+    local skip = {}
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl.Character then skip[#skip + 1] = pl.Character end
+    end
+    local o = origin
+    for _ = 1, 16 do
+        rp.FilterDescendantsInstances = skip
+        local d = target - o
+        if d.Magnitude < 0.05 then return nil end
+        local res = Workspace:Raycast(o, d, rp)
+        if not res then return nil end
+        if blocks(res.Instance) then return res end
+        skip[#skip + 1] = res.Instance
+        o = res.Position + d.Unit * 0.3
+    end
+    return nil
 end
 
 local function clearLine(a, b) return blockRay(a, b) == nil end
 
 local CLEARANCE = 6
 local function clearWide(a, b)
-	if not clearLine(a, b) then return false end
-	local d = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
-	if d.Magnitude < 0.1 then return true end
-	local p = Vector3.new(-d.Z, 0, d.X).Unit * CLEARANCE
-	return clearLine(a + p, b + p) and clearLine(a - p, b - p)
+    if not clearLine(a, b) then return false end
+    local d = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+    if d.Magnitude < 0.1 then return true end
+    local p = Vector3.new(-d.Z, 0, d.X).Unit * CLEARANCE
+    return clearLine(a + p, b + p) and clearLine(a - p, b - p)
 end
 
 local function computeRoute(fromPos, toPos, facingDir)
-	if clearLine(fromPos, toPos) then
-		return { toPos }
-	end
-	local entry = facingDir and (toPos - facingDir * 14) or toPos
-	local groundFrom = Vector3.new(fromPos.X, fromPos.Y, fromPos.Z)
-	local groundTo   = Vector3.new(entry.X, fromPos.Y, entry.Z)
-	local path = PathfindingService:CreatePath({
-		AgentRadius      = 6,
-		AgentHeight      = 6,
-		AgentCanJump     = true,
-		AgentJumpHeight  = 12,
-		AgentMaxSlope    = 45,
-		Costs            = { Water = 100 },
-	})
-	local ok = pcall(function()
-		path:ComputeAsync(groundFrom, groundTo)
-	end)
-	if not ok or path.Status ~= Enum.PathStatus.Success then
-		return { entry + Vector3.new(0, 3, 0), toPos }
-	end
-	local waypoints = path:GetWaypoints()
-	if #waypoints == 0 then
-		return { entry + Vector3.new(0, 3, 0), toPos }
-	end
-	local FLOAT = 3
-	local raw = {}
-	table.insert(raw, fromPos + Vector3.new(0, FLOAT, 0))
-	local lastAdded = waypoints[1].Position
-	table.insert(raw, lastAdded + Vector3.new(0, FLOAT, 0))
-	for i = 2, #waypoints do
-		local pos = waypoints[i].Position
-		if (pos - lastAdded).Magnitude >= 6 then
-			table.insert(raw, pos + Vector3.new(0, FLOAT, 0))
-			lastAdded = pos
-		end
-	end
-	table.insert(raw, entry + Vector3.new(0, FLOAT, 0))
-	table.insert(raw, toPos)
-	if #raw <= 2 then
-		return raw
-	end
-	local simplified = { raw[1] }
-	local currentIndex = 1
-	while currentIndex < #raw do
-		local bestIndex = currentIndex + 1
-		for i = #raw, currentIndex + 1, -1 do
-			local a = simplified[#simplified]
-			local b = raw[i]
-			if clearWide(a, b) then
-				bestIndex = i
-				break
-			end
-		end
-		table.insert(simplified, raw[bestIndex])
-		currentIndex = bestIndex
-	end
-	for i = 1, #simplified do
-		local p = simplified[i]
-		simplified[i] = Vector3.new(p.X, p.Y, p.Z)
-	end
-	return simplified
+    if clearLine(fromPos, toPos) then
+        return { toPos }
+    end
+    local entry = facingDir and (toPos - facingDir * 14) or toPos
+    local groundFrom = Vector3.new(fromPos.X, fromPos.Y, fromPos.Z)
+    local groundTo   = Vector3.new(entry.X, fromPos.Y, entry.Z)
+    local path = PathfindingService:CreatePath({
+        AgentRadius      = 6,
+        AgentHeight      = 6,
+        AgentCanJump     = true,
+        AgentJumpHeight  = 12,
+        AgentMaxSlope    = 45,
+        Costs            = { Water = 100 },
+    })
+    local ok = pcall(function()
+        path:ComputeAsync(groundFrom, groundTo)
+    end)
+    if not ok or path.Status ~= Enum.PathStatus.Success then
+        return { entry + Vector3.new(0, 3, 0), toPos }
+    end
+    local waypoints = path:GetWaypoints()
+    if #waypoints == 0 then
+        return { entry + Vector3.new(0, 3, 0), toPos }
+    end
+    local FLOAT = 3
+    local raw = {}
+    table.insert(raw, fromPos + Vector3.new(0, FLOAT, 0))
+    local lastAdded = waypoints[1].Position
+    table.insert(raw, lastAdded + Vector3.new(0, FLOAT, 0))
+    for i = 2, #waypoints do
+        local pos = waypoints[i].Position
+        if (pos - lastAdded).Magnitude >= 6 then
+            table.insert(raw, pos + Vector3.new(0, FLOAT, 0))
+            lastAdded = pos
+        end
+    end
+    table.insert(raw, entry + Vector3.new(0, FLOAT, 0))
+    table.insert(raw, toPos)
+    if #raw <= 2 then
+        return raw
+    end
+    local simplified = { raw[1] }
+    local currentIndex = 1
+    while currentIndex < #raw do
+        local bestIndex = currentIndex + 1
+        for i = #raw, currentIndex + 1, -1 do
+            local a = simplified[#simplified]
+            local b = raw[i]
+            if clearWide(a, b) then
+                bestIndex = i
+                break
+            end
+        end
+        table.insert(simplified, raw[bestIndex])
+        currentIndex = bestIndex
+    end
+    for i = 1, #simplified do
+        local p = simplified[i]
+        simplified[i] = Vector3.new(p.X, p.Y, p.Z)
+    end
+    return simplified
 end
 
 local function velMoveThrough(hrp, waypoints, speedOverride)
-	if not hrp or not hrp.Parent or #waypoints == 0 then
-		return function() end
-	end
-	local wpIdx = 1
-	local done = false
-	local conn
-	local function hardStop()
-		if done then return end
-		done = true
-		if conn then conn:Disconnect() end
-		if hrp and hrp.Parent then
-			vZeroLocal(hrp)
-		end
-	end
-	conn = RunService.Heartbeat:Connect(function()
-		if not hrp or not hrp.Parent or done then
-			hardStop()
-			return
-		end
-		local target = waypoints[wpIdx]
-		local diff = target - hrp.Position
-		local mag = diff.Magnitude
-		if mag < ARRIVE then
-			wpIdx = wpIdx + 1
-			if wpIdx > #waypoints then
-				hardStop()
-				return
-			end
-			target = waypoints[wpIdx]
-			diff = target - hrp.Position
-			mag = diff.Magnitude
-		end
-		if mag >= 0.1 then
-			local dir = diff.Unit
-			local spd = speedOverride or (_G.VanishCarpetSpeed or Config.TpSettings.TpV2Speed or 160)
-			hrp.AssemblyLinearVelocity = dir * spd
-		end
-	end)
-	return function()
-		hardStop()
-	end
+    if not hrp or not hrp.Parent or #waypoints == 0 then
+        return function() end
+    end
+    local wpIdx = 1
+    local done = false
+    local conn
+    local ARRIVE = 3
+    local function hardStop()
+        if done then return end
+        done = true
+        if conn then conn:Disconnect() end
+        if hrp and hrp.Parent then
+            vZeroLocal(hrp)
+        end
+    end
+    conn = RunService.Heartbeat:Connect(function()
+        if not hrp or not hrp.Parent or done then
+            hardStop()
+            return
+        end
+        equipSelectedTpTool()
+        local target = waypoints[wpIdx]
+        local diff = target - hrp.Position
+        local mag = diff.Magnitude
+        if mag < ARRIVE then
+            wpIdx = wpIdx + 1
+            if wpIdx > #waypoints then
+                hardStop()
+                return
+            end
+            target = waypoints[wpIdx]
+            diff = target - hrp.Position
+            mag = diff.Magnitude
+        end
+        if mag >= 0.1 then
+            local dir = diff.Unit
+            local spd = speedOverride or (_G.VanishCarpetSpeed or Config.TpSettings.TpV2Speed or 160)
+            hrp.AssemblyLinearVelocity = dir * spd
+        end
+    end)
+    return function()
+        hardStop()
+    end
 end
 
-local function estimatePathDistance(fromPos, toPos)
-	local path = PathfindingService:CreatePath({
-		AgentRadius = 9,
-		AgentHeight = 6,
-		AgentCanJump = true,
-		AgentJumpHeight = 45,
-		AgentMaxSlope = 45,
-		Costs = { Water = 100 },
-	})
-	local ok = pcall(function()
-		path:ComputeAsync(fromPos, toPos)
-	end)
-	if not ok or path.Status ~= Enum.PathStatus.Success then
-		return (fromPos - toPos).Magnitude
-	end
-	local wps = path:GetWaypoints()
-	if #wps < 2 then
-		return (fromPos - toPos).Magnitude
-	end
-	local dist = 0
-	local last = wps[1].Position
-	for i = 2, #wps do
-		local p = wps[i].Position
-		dist = dist + (p - last).Magnitude
-		last = p
-	end
-	return dist
+local function sxeFixatePosition(hrp, destPos, facingDir)
+    if not hrp or not hrp.Parent then return end
+    hrp.CFrame = CFrame.new(destPos, destPos + facingDir)
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    local syncFrames = 5
+    local syncConn
+    syncConn = RunService.Heartbeat:Connect(function()
+        if not hrp or not hrp.Parent or syncFrames <= 0 then 
+            if syncConn then syncConn:Disconnect() end
+            return 
+        end
+        syncFrames = syncFrames - 1
+        hrp.CFrame = CFrame.new(destPos, destPos + facingDir)
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end)
+    local t0 = tick()
+    while tick() - t0 < 0.8 do
+        local hum = hrp.Parent:FindFirstChildOfClass("Humanoid")
+        if hum and hum.FloorMaterial ~= Enum.Material.Air then break end
+        task.wait(0.05)
+    end
 end
 
-local function getBaseForPlot(plotName, brainPos)
-	if plotName and PLOT_TO_BASE[plotName] then
-		return PLOT_TO_BASE[plotName]
-	end
-	if not brainPos then return nil end
-	local bestBase
-	local minDist = math.huge
-	for baseName, pts in pairs(BASE_POINTS) do
-		for _, pt in ipairs(pts) do
-			local d = (pt.pos - brainPos).Magnitude
-			if d < minDist then
-				minDist = d
-				bestBase = baseName
-			end
-		end
-	end
-	if plotName and bestBase then
-		PLOT_TO_BASE[plotName] = bestBase
-	end
-	return bestBase
+local function getBaseIdxByPetPos(pos)
+    local closest, dist = 1, math.huge
+    for i = 1, 8 do
+        local b = BASES_LOW[i]
+        local d = (pos.X - b.X)^2 + (pos.Z - b.Z)^2
+        if d < dist then dist = d; closest = i end
+    end
+    return closest
 end
 
-local function getBestBasePointInBase(brainBaseName, brainPos)
-	local baseList = BASE_POINTS[brainBaseName]
-	if not baseList then return nil end
-	local char = LP.Character
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-	local playerPos = hrp and hrp.Position or brainPos
-	local minHeightDiff = math.huge
-	for _, entry in ipairs(baseList) do
-		local diff = math.abs(entry.pos.Y - brainPos.Y)
-		if diff < minHeightDiff then
-			minHeightDiff = diff
-		end
-	end
-	local candidates = {}
-	for _, entry in ipairs(baseList) do
-		if math.abs(entry.pos.Y - brainPos.Y) <= (minHeightDiff + 5) then
-			table.insert(candidates, entry)
-		end
-	end
-	if #candidates == 0 then
-		candidates = baseList
-	end
-	local bestEntry
-	local minTravelDist = math.huge
-	for _, entry in ipairs(candidates) do
-		local distToPlayer = (entry.pos - playerPos).Magnitude
-		if distToPlayer < minTravelDist then
-			minTravelDist = distToPlayer
-			bestEntry = entry
-		end
-	end
-	return bestEntry
+local function getBestBasePointInBase(idx, isUpper, playerZ)
+    local base = isUpper and BASES_HIGH[idx] or BASES_LOW[idx]
+    local frontZ = math.clamp(playerZ - base.Z, -18, 18) + base.Z
+    local coord = Vector3.new(base.X, isUpper and 16.85 or -3.04, frontZ)
+    local faceDir = (idx <= 4) and Vector3.new(-1, 0, 0) or Vector3.new(1, 0, 0)
+    return { pos = coord, look = faceDir }
 end
 
 local ThirdFloorPlatform = Instance.new("Part")
@@ -592,546 +506,516 @@ ThirdFloorPlatform.CFrame       = CFrame.new(0, -1000, 0)
 ThirdFloorPlatform.Parent       = Workspace
 
 local function isThirdFloor(brainPos)
-	return brainPos and brainPos.Y > 20
+    return brainPos and brainPos.Y > 20
 end
 
 local function updateThirdFloorPlatform()
-	local sel = getPrioritySelected()
-	if not sel then
-		ThirdFloorPlatform.CFrame = CFrame.new(0, -1000, 0)
-		ThirdFloorPlatform.CanCollide = false
-		return
-	end
-	local brainPos = getBrainrotPosUnified(sel)
-	if not brainPos or not isThirdFloor(brainPos) then
-		ThirdFloorPlatform.CFrame = CFrame.new(0, -1000, 0)
-		ThirdFloorPlatform.CanCollide = false
-		return
-	end
-	local airPos = Vector3.new(brainPos.X, brainPos.Y - 7.5, brainPos.Z)
-	ThirdFloorPlatform.Position   = airPos - Vector3.new(0, 4.5, 0)
-	ThirdFloorPlatform.CanCollide = true
+    local sel = getPrioritySelected()
+    if not sel then
+        ThirdFloorPlatform.CFrame = CFrame.new(0, -1000, 0)
+        ThirdFloorPlatform.CanCollide = false
+        return
+    end
+    local brainPos = getBrainrotPosUnified(sel)
+    if not brainPos or not isThirdFloor(brainPos) then
+        ThirdFloorPlatform.CFrame = CFrame.new(0, -1000, 0)
+        ThirdFloorPlatform.CanCollide = false
+        return
+    end
+    local airPos = Vector3.new(brainPos.X, brainPos.Y - 7.5, brainPos.Z)
+    ThirdFloorPlatform.Position   = airPos - Vector3.new(0, 4.5, 0)
+    ThirdFloorPlatform.CanCollide = true
 end
 
 task.spawn(function()
-	while ThirdFloorPlatform and ThirdFloorPlatform.Parent do
-		pcall(updateThirdFloorPlatform)
-		task.wait(0.1)
-	end
+    while ThirdFloorPlatform and ThirdFloorPlatform.Parent do
+        pcall(updateThirdFloorPlatform)
+        task.wait(0.1)
+    end
 end)
 
 local lastYHeartbeat3
 RunService.Heartbeat:Connect(function()
-	local char = LP.Character
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-	if not hrp or not ThirdFloorPlatform then
-		lastYHeartbeat3 = nil
-		return
-	end
-	local currentY = hrp.Position.Y
-	local topY     = ThirdFloorPlatform.Position.Y + ThirdFloorPlatform.Size.Y * 0.5
-	if not lastYHeartbeat3 then
-		lastYHeartbeat3 = currentY
-		return
-	end
-	if currentY > lastYHeartbeat3 then
-		if lastYHeartbeat3 < topY and currentY < topY + 5 then
-			ThirdFloorPlatform.CanCollide = false
-			task.delay(0.08, function()
-				if ThirdFloorPlatform then
-					ThirdFloorPlatform.CanCollide = true
-				end
-			end)
-		end
-	end
-	lastYHeartbeat3 = currentY
+    local char = LP.Character
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp or not ThirdFloorPlatform then
+        lastYHeartbeat3 = nil
+        return
+    end
+    local currentY = hrp.Position.Y
+    local topY     = ThirdFloorPlatform.Position.Y + ThirdFloorPlatform.Size.Y * 0.5
+    if not lastYHeartbeat3 then
+        lastYHeartbeat3 = currentY
+        return
+    end
+    if currentY > lastYHeartbeat3 then
+        if lastYHeartbeat3 < topY and currentY < topY + 5 then
+            ThirdFloorPlatform.CanCollide = false
+            task.delay(0.08, function()
+                if ThirdFloorPlatform then
+                    ThirdFloorPlatform.CanCollide = true
+                end
+            end)
+        end
+    end
+    lastYHeartbeat3 = currentY
 end)
 
 local function softStabilizeHumanoid(hum)
-	if not hum then return end
-	if hum.Health <= 0 then return end
-	local s = hum:GetState()
-	if s == Enum.HumanoidStateType.FallingDown
-		or s == Enum.HumanoidStateType.Ragdoll
-		or s == Enum.HumanoidStateType.PlatformStanding then
-		hum:ChangeState(Enum.HumanoidStateType.Running)
-	end
+    if not hum then return end
+    if hum.Health <= 0 then return end
+    local s = hum:GetState()
+    if s == Enum.HumanoidStateType.FallingDown
+        or s == Enum.HumanoidStateType.Ragdoll
+        or s == Enum.HumanoidStateType.PlatformStanding then
+        hum:ChangeState(Enum.HumanoidStateType.Running)
+    end
 end
 
 local function EquipToolLP(name)
-	local char = LP.Character
-	if not char then return nil end
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	if not hum then return nil end
-	local bp   = LP:FindFirstChild("Backpack")
-	local tool = char:FindFirstChild(name) or (bp and bp:FindFirstChild(name))
-	if tool then
-		hum:UnequipTools()
-		task.wait()
-		hum:EquipTool(tool)
-	end
-	return tool
+    local char = LP.Character
+    if not char then return nil end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return nil end
+    local bp   = LP:FindFirstChild("Backpack")
+    local tool = char:FindFirstChild(name) or (bp and bp:FindFirstChild(name))
+    if tool then
+        hum:UnequipTools()
+        task.wait()
+        hum:EquipTool(tool)
+    end
+    return tool
 end
 
 local function placeCloneOnly()
-	local char = LP.Character
-	if not char then return false end
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if not hum or not hrp then return false end
-	softStabilizeHumanoid(hum)
-	vZeroLocal(hrp)
-	local cloner = EquipToolLP("Quantum Cloner")
-	if not cloner then return false end
-	task.wait(0.015)
-	pcall(function() cloner:Activate() end)
-	local cloneName = tostring(LP.UserId) .. "_Clone"
-	local clone
-	local t0 = tick()
-	while tick() - t0 < 1.5 do
-		clone = Workspace:FindFirstChild(cloneName)
-		if clone then break end
-		task.wait(0.03)
-	end
-	return clone ~= nil
+    local char = LP.Character
+    if not char then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return false end
+    softStabilizeHumanoid(hum)
+    vZeroLocal(hrp)
+    local cloner = EquipToolLP("Quantum Cloner")
+    if not cloner then return false end
+    task.wait(0.015)
+    pcall(function() cloner:Activate() end)
+    local cloneName = tostring(LP.UserId) .. "_Clone"
+    local clone
+    local t0 = tick()
+    while tick() - t0 < 1.5 do
+        clone = Workspace:FindFirstChild(cloneName)
+        if clone then break end
+        task.wait(0.03)
+    end
+    return clone ~= nil
 end
 
 local function swapWithClone()
-	local tf  = PlayerGui:FindFirstChild("ToolsFrames")
-	local qcf = tf and tf:FindFirstChild("QuantumCloner")
-	local btn = qcf and qcf:FindFirstChild("TeleportToClone")
-	if not btn then return false end
-	btn.Visible = true
-	if typeof(firesignal) == "function" then
-		local ok = pcall(function()
-			firesignal(btn.MouseButton1Down)
-			firesignal(btn.MouseButton1Click)
-			firesignal(btn.MouseButton1Up)
-		end)
-		if not ok then return false end
-	else
-		local inset = GuiService:GetGuiInset()
-		local pos   = btn.AbsolutePosition + btn.AbsoluteSize * 0.5
-		VirtualInputManager:SendMouseButtonEvent(pos.X+inset.X, pos.Y+inset.Y, 0, true,  game, 1)
-		task.wait(0.02)
-		VirtualInputManager:SendMouseButtonEvent(pos.X+inset.X, pos.Y+inset.Y, 0, false, game, 1)
-	end
-	return true
+    local tf  = PlayerGui:FindFirstChild("ToolsFrames")
+    local qcf = tf and tf:FindFirstChild("QuantumCloner")
+    local btn = qcf and qcf:FindFirstChild("TeleportToClone")
+    if not btn then return false end
+    btn.Visible = true
+    if typeof(firesignal) == "function" then
+        local ok = pcall(function()
+            firesignal(btn.MouseButton1Down)
+            firesignal(btn.MouseButton1Click)
+            firesignal(btn.MouseButton1Up)
+        end)
+        if not ok then return false end
+    else
+        local inset = GuiService:GetGuiInset()
+        local pos   = btn.AbsolutePosition + btn.AbsoluteSize * 0.5
+        VirtualInputManager:SendMouseButtonEvent(pos.X+inset.X, pos.Y+inset.Y, 0, true,  game, 1)
+        task.wait(0.02)
+        VirtualInputManager:SendMouseButtonEvent(pos.X+inset.X, pos.Y+inset.Y, 0, false, game, 1)
+    end
+    return true
 end
 
 local function doCloneUnified()
-	if _G._UnifiedIsCloning then return false end
-	_G._UnifiedIsCloning = true
-	local success = false
-	local ok = pcall(function()
-		if not placeCloneOnly() then return end
-		task.wait(0.05)
-		if not swapWithClone() then return end
-		success = true
-	end)
-	_G._UnifiedIsCloning = false
-	return ok and success
-end
-
-local function performFinalFix(hrp, hum, destPos, facingDir)
-	if not hrp or not hrp.Parent then return end
-	local preStopDist = 1
-	local dashDist    = 2
-	local preStopPos = destPos - (facingDir.Unit * preStopDist)
-	local arriveDist = 0.5
-	local speed      = 150
-	local flying     = true
-	local conn
-	conn = RunService.Heartbeat:Connect(function()
-		if not hrp or not hrp.Parent then
-			flying = false
-			return
-		end
-		local diff = preStopPos - hrp.Position
-		if diff.Magnitude < arriveDist then
-			flying = false
-			return
-		end
-		hrp.AssemblyLinearVelocity = diff.Unit * speed
-	end)
-	while flying do task.wait() end
-	if conn then conn:Disconnect() end
-	vZeroLocal(hrp)
-	hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facingDir)
-	task.wait(0.02)
-	if hum then
-		hum:ChangeState(Enum.HumanoidStateType.Jumping)
-	end
-	hrp.AssemblyLinearVelocity = Vector3.new(0, 55, 0)
-	task.wait(0.08)
-	local steps  = 12
-	local startP = hrp.Position
-	local targetP = startP + facingDir.Unit * dashDist
-	local diff = targetP - startP
-	for i = 1, steps do
-		if not hrp or not hrp.Parent then break end
-		local alpha = i / steps
-		local nextP = startP + (diff * alpha)
-		hrp.CFrame = CFrame.new(nextP, nextP + facingDir)
-		vZeroLocal(hrp)
-		task.wait(0.01)
-	end
-	hrp.CFrame = CFrame.new(targetP, targetP + facingDir)
-	vZeroLocal(hrp)
+    if _G._UnifiedIsCloning then return false end
+    _G._UnifiedIsCloning = true
+    local success = false
+    local ok = pcall(function()
+        if not placeCloneOnly() then return end
+        task.wait(0.05)
+        if not swapWithClone() then return end
+        success = true
+    end)
+    _G._UnifiedIsCloning = false
+    return ok and success
 end
 
 local function finalSnap(hrp, targetPos)
-	if not hrp or not hrp.Parent then return end
-	local char = hrp.Parent
-	local hum  = char and char:FindFirstChildOfClass("Humanoid")
-	local cf   = hrp.CFrame
-	local baseTarget = Vector3.new(targetPos.X, targetPos.Y + 0.5, targetPos.Z)
-	vZeroLocal(hrp)
-	hrp.CFrame = CFrame.new(baseTarget) * CFrame.fromMatrix(Vector3.new(), cf.RightVector, cf.UpVector, cf.LookVector)
-	vZeroLocal(hrp)
-	softStabilizeHumanoid(hum)
+    if not hrp or not hrp.Parent then return end
+    local char = hrp.Parent
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    local cf   = hrp.CFrame
+    local baseTarget = Vector3.new(targetPos.X, targetPos.Y + 0.5, targetPos.Z)
+    vZeroLocal(hrp)
+    hrp.CFrame = CFrame.new(baseTarget) * CFrame.fromMatrix(Vector3.new(), cf.RightVector, cf.UpVector, cf.LookVector)
+    vZeroLocal(hrp)
+    softStabilizeHumanoid(hum)
 end
 
 local function velWalkTo(hrp, targetPos, walkSpeed)
-	if not hrp or not hrp.Parent then return end
-	local char = hrp.Parent
-	local hum  = char and char:FindFirstChildOfClass("Humanoid")
-	local EPS = 0.5
-	local maxDuration  = 10
-	local startTime    = tick()
-	local conn
-	conn = RunService.Heartbeat:Connect(function()
-		if not hrp or not hrp.Parent then
-			if conn then conn:Disconnect() end
-			return
-		end
-		local pos   = hrp.Position
-		local goal  = Vector3.new(targetPos.X, pos.Y, targetPos.Z)
-		local diff  = goal - pos
-		local dist  = diff.Magnitude
-		if dist < EPS or tick() - startTime > maxDuration then
-			if conn then conn:Disconnect() end
-			finalSnap(hrp, targetPos)
-			return
-		end
-		local dir = diff.Unit
-		hrp.AssemblyLinearVelocity = Vector3.new(dir.X, 0, dir.Z) * walkSpeed
-		softStabilizeHumanoid(hum)
-	end)
+    if not hrp or not hrp.Parent then return end
+    local char = hrp.Parent
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    local EPS = 0.5
+    local maxDuration  = 10
+    local startTime    = tick()
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if not hrp or not hrp.Parent then
+            if conn then conn:Disconnect() end
+            return
+        end
+        local pos   = hrp.Position
+        local goal  = Vector3.new(targetPos.X, pos.Y, targetPos.Z)
+        local diff  = goal - pos
+        local dist  = diff.Magnitude
+        if dist < EPS or tick() - startTime > maxDuration then
+            if conn then conn:Disconnect() end
+            finalSnap(hrp, targetPos)
+            return
+        end
+        local dir = diff.Unit
+        hrp.AssemblyLinearVelocity = Vector3.new(dir.X, 0, dir.Z) * walkSpeed
+        softStabilizeHumanoid(hum)
+    end)
 end
 
 local function getFrontOfBrainrot(hrp, brainPos)
-	local offsetDist = 3
-	local look = hrp and hrp.CFrame.LookVector or Vector3.new(0,0,-1)
-	local target = brainPos - look * offsetDist
-	if hrp then
-		target = Vector3.new(target.X, hrp.Position.Y, target.Z)
-	else
-		target = Vector3.new(target.X, brainPos.Y + 0.5, target.Z)
-	end
-	return target
+    local offsetDist = 3
+    local look = hrp and hrp.CFrame.LookVector or Vector3.new(0,0,-1)
+    local target = brainPos - look * offsetDist
+    if hrp then
+        target = Vector3.new(target.X, hrp.Position.Y, target.Z)
+    else
+        target = Vector3.new(target.X, brainPos.Y + 0.5, target.Z)
+    end
+    return target
 end
 
 local function quickDoubleTpToBrainrot(sel)
-	local brainPos = getBrainrotPosUnified(sel)
-	if not brainPos then return end
-	for i = 1, 2 do
-		local char = LP.Character
-		local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-		local hum  = char and char:FindFirstChildOfClass("Humanoid")
-		if not hrp then return end
-		equipAnyCarpet()
-		vZeroLocal(hrp)
-		local pos = hrp.Position
-		local adjusted = Vector3.new(brainPos.X, pos.Y, brainPos.Z)
-		local cf = hrp.CFrame
-		hrp.CFrame = CFrame.new(adjusted + Vector3.new(0,0.5,0)) * CFrame.fromMatrix(Vector3.new(), cf.RightVector, cf.UpVector, cf.LookVector)
-		vZeroLocal(hrp)
-		softStabilizeHumanoid(hum)
-		task.wait(0.3)
-	end
+    local brainPos = getBrainrotPosUnified(sel)
+    if not brainPos then return end
+    for _ = 1, 2 do
+        local char = LP.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
+        if not hrp then return end
+        equipAnyCarpet()
+        vZeroLocal(hrp)
+        local pos = hrp.Position
+        local adjusted = Vector3.new(brainPos.X, pos.Y, brainPos.Z)
+        local cf = hrp.CFrame
+        hrp.CFrame = CFrame.new(adjusted + Vector3.new(0,0.5,0)) * CFrame.fromMatrix(Vector3.new(), cf.RightVector, cf.UpVector, cf.LookVector)
+        vZeroLocal(hrp)
+        softStabilizeHumanoid(hum)
+        task.wait(0.3)
+    end
 end
 
 local function AfterClone_ThirdFloorAware(savedSel)
-	local sel = savedSel
-	if not sel then return end
-	local brainPos = getBrainrotPosUnified(sel)
-	if not brainPos then return end
-	local char = LP.Character
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-	local hum  = char and char:FindFirstChildOfClass("Humanoid")
-	if not hrp then return end
-	equipAnyCarpet()
-	vZeroLocal(hrp)
-	softStabilizeHumanoid(hum)
-	if isThirdFloor(brainPos) and ThirdFloorPlatform and ThirdFloorPlatform.CanCollide then
-		local airPos = Vector3.new(brainPos.X, brainPos.Y - 7.5, brainPos.Z)
-		local target = airPos + Vector3.new(0, 2.5, 0)
-		local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
-		local done = false
-		local conn
-		conn = RunService.Heartbeat:Connect(function()
-			if not hrp or not hrp.Parent then
-				if conn then conn:Disconnect() end
-				return
-			end
-			local diff = target - hrp.Position
-			local dist = diff.Magnitude
-			if dist < 0.8 then
-				done = true
-				vZeroLocal(hrp)
-				if conn then conn:Disconnect() end
-				return
-			end
-			hrp.AssemblyLinearVelocity = diff.Unit * walkSpeed
-			softStabilizeHumanoid(hum)
-		end)
-		local t0 = tick()
-		local timeout = 6
-		while not done and tick() - t0 < timeout do
-			task.wait(0.05)
-		end
-		if conn then conn:Disconnect() end
-		vZeroLocal(hrp)
-		softStabilizeHumanoid(hum)
-		return
-	end
-	local targetPos = getFrontOfBrainrot(hrp, brainPos)
-	local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
-	velWalkTo(hrp, targetPos, walkSpeed)
+    local sel = savedSel
+    if not sel then return end
+    local brainPos = getBrainrotPosUnified(sel)
+    if not brainPos then return end
+    local char = LP.Character
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp then return end
+    equipAnyCarpet()
+    vZeroLocal(hrp)
+    softStabilizeHumanoid(hum)
+    if isThirdFloor(brainPos) and ThirdFloorPlatform and ThirdFloorPlatform.CanCollide then
+        local airPos = Vector3.new(brainPos.X, brainPos.Y - 7.5, brainPos.Z)
+        local target = airPos + Vector3.new(0, 2.5, 0)
+        local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
+        local done = false
+        local conn
+        conn = RunService.Heartbeat:Connect(function()
+            if not hrp or not hrp.Parent then
+                if conn then conn:Disconnect() end
+                return
+            end
+            local diff = target - hrp.Position
+            local dist = diff.Magnitude
+            if dist < 0.8 then
+                done = true
+                vZeroLocal(hrp)
+                if conn then conn:Disconnect() end
+                return
+            end
+            hrp.AssemblyLinearVelocity = diff.Unit * walkSpeed
+            softStabilizeHumanoid(hum)
+        end)
+        local t0 = tick()
+        local timeout = 6
+        while not done and tick() - t0 < timeout do
+            task.wait(0.05)
+        end
+        if conn then conn:Disconnect() end
+        vZeroLocal(hrp)
+        softStabilizeHumanoid(hum)
+        return
+    end
+    local targetPos = getFrontOfBrainrot(hrp, brainPos)
+    local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
+    velWalkTo(hrp, targetPos, walkSpeed)
+end
+
+local function carpetGlideTo(petPos)
+    if not petPos then return end
+    local char = LP.Character
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+    equipAnyCarpet()
+    vZeroLocal(hrp)
+    softStabilizeHumanoid(hum)
+    local FLOAT_OFFSET = petPos.Y > 20 and -4 or -1.5
+    local goal = Vector3.new(petPos.X, petPos.Y + FLOAT_OFFSET, petPos.Z)
+    local SPEED = Config.TpSettings.WalkToBrainrotSpd or 190
+    local t0 = tick()
+    local lastDist = math.huge
+    local stall = 0
+    while hrp.Parent and tick() - t0 < 8 do
+        if LP:GetAttribute("Stealing") then break end
+        local diff = goal - hrp.Position
+        local mag = diff.Magnitude
+        if mag < 2.5 then break end
+        if mag > lastDist - 0.05 then stall = stall + 1 else stall = 0 end
+        if stall >= 30 then break end
+        lastDist = mag
+        hrp.AssemblyLinearVelocity = diff.Unit * SPEED
+        RunService.Heartbeat:Wait()
+    end
+    if hrp and hrp.Parent then
+        vZeroLocal(hrp)
+        hrp.CFrame = CFrame.new(goal, goal + hrp.CFrame.LookVector)
+        vZeroLocal(hrp)
+    end
 end
 
 local function velocityTpToBrainrot(sel)
-	if not sel then return end
-	local brainPos = getBrainrotPosUnified(sel)
-	if not brainPos then return end
-	local char = LP.Character
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-	local hum  = char and char:FindFirstChildOfClass("Humanoid")
-	if not hrp then return end
-	equipAnyCarpet()
-	local speed = Config.TpSettings.WalkToBrainrotSpd or 50
-	local route = { hrp.Position, brainPos }
-	local stop = velMoveThrough(hrp, route, speed)
-	local t0  = tick()
-	local timeout = 5
-	while tick() - t0 < timeout do
-		if not hrp or not hrp.Parent then break end
-		if (hrp.Position - brainPos).Magnitude < 2 then break end
-		softStabilizeHumanoid(hum)
-		task.wait(0.03)
-	end
-	stop()
-	finalSnap(hrp, brainPos)
+    if not sel then return end
+    local brainPos = getBrainrotPosUnified(sel)
+    if not brainPos then return end
+    carpetGlideTo(brainPos)
 end
 
 local function instantVelocityTpToBrainrot(sel)
-	if not sel then return end
-	local brainPos = getBrainrotPosUnified(sel)
-	if not brainPos then return end
-	local char = LP.Character
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-	local hum  = char and char:FindFirstChildOfClass("Humanoid")
-	if not hrp then return end
-	equipAnyCarpet()
-	vZeroLocal(hrp)
-	local pos = hrp.Position
-	local targetPos
-	if isThirdFloor(brainPos) and ThirdFloorPlatform and ThirdFloorPlatform.Parent then
-		local platformTopY = (brainPos.Y - 12) + (ThirdFloorPlatform.Size.Y * 0.5)
-		targetPos = Vector3.new(
-			ThirdFloorPlatform.Position.X,
-			platformTopY + 3,
-			ThirdFloorPlatform.Position.Z
-		)
-	else
-		targetPos = Vector3.new(brainPos.X, pos.Y, brainPos.Z)
-	end
-	local cf = hrp.CFrame
-	hrp.CFrame = CFrame.new(targetPos + Vector3.new(0,0.5,0)) 
-		* CFrame.fromMatrix(Vector3.new(), cf.RightVector, cf.UpVector, cf.LookVector)
-	vZeroLocal(hrp)
-	softStabilizeHumanoid(hum)
+    if not sel then return end
+    local brainPos = getBrainrotPosUnified(sel)
+    if not brainPos then return end
+    local char = LP.Character
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp then return end
+    equipAnyCarpet()
+    vZeroLocal(hrp)
+    local pos = hrp.Position
+    local targetPos
+    if isThirdFloor(brainPos) and ThirdFloorPlatform and ThirdFloorPlatform.Parent then
+        local platformTopY = (brainPos.Y - 12) + (ThirdFloorPlatform.Size.Y * 0.5)
+        targetPos = Vector3.new(
+            ThirdFloorPlatform.Position.X,
+            platformTopY + 3,
+            ThirdFloorPlatform.Position.Z
+        )
+    else
+        targetPos = Vector3.new(brainPos.X, pos.Y, brainPos.Z)
+    end
+    local cf = hrp.CFrame
+    hrp.CFrame = CFrame.new(targetPos + Vector3.new(0,0.5,0)) 
+        * CFrame.fromMatrix(Vector3.new(), cf.RightVector, cf.UpVector, cf.LookVector)
+    vZeroLocal(hrp)
+    softStabilizeHumanoid(hum)
 end
-
-local function applyGrapplePhysicsBypass(char)
-	local hrp = char:WaitForChild("HumanoidRootPart")
-	hrp.ChildAdded:Connect(function(child)
-		if child.Name == "FlightPower" or child:IsA("BodyVelocity") then
-			task.wait()
-			child:Destroy()
-		end
-	end)
-end
-
-if LP.Character then applyGrapplePhysicsBypass(LP.Character) end
-LP.CharacterAdded:Connect(applyGrapplePhysicsBypass)
 
 local function fireGrappleOnceMouseFree()
-	local char = LP.Character
-	local hum  = char and char:FindFirstChildOfClass("Humanoid")
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-	if not hum or not hrp then return false end
-	softStabilizeHumanoid(hum)
-	local hook = findToolLocal("Grapple Hook")
-	if not hook then return false end
-	if hook.Parent ~= char then
-		pcall(function() hum:EquipTool(hook) end)
-		task.wait(0.02)
-	end
-	local fakeTargetPos = hrp.Position + Vector3.new(0, -50, 0)
-	PlayerMouse.Hit    = { Position = fakeTargetPos }
-	PlayerMouse.Target = workspace.Terrain
-	local ok = pcall(function() hook:Activate() end)
-	return ok
+    local char = LP.Character
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return false end
+    local function applyBypass()
+        for _, c in ipairs(hrp:GetChildren()) do
+            if c.Name == "FlightPower" or c:IsA("BodyVelocity") then
+                c:Destroy()
+            end
+        end
+        if not hrp:FindFirstChild("_BypassHook") then
+            local tag = Instance.new("BoolValue")
+            tag.Name = "_BypassHook"
+            tag.Parent = hrp
+            hrp.ChildAdded:Connect(function(child)
+                if child.Name == "FlightPower" or child:IsA("BodyVelocity") then
+                    task.wait()
+                    child:Destroy()
+                end
+            end)
+        end
+    end
+    applyBypass()
+    softStabilizeHumanoid(hum)
+    local hook = findToolLocal("Grapple Hook")
+    if not hook then return false end
+    if hook.Parent ~= char then
+        pcall(function() hum:EquipTool(hook) end)
+        task.wait(0.02)
+    end
+    local fakeTargetPos = hrp.Position + Vector3.new(0, -50, 0)
+    PlayerMouse.Hit    = { Position = fakeTargetPos }
+    PlayerMouse.Target = workspace.Terrain
+    local ok = pcall(function() hook:Activate() end)
+    task.delay(0.7, function()
+        local tag = hrp:FindFirstChild("_BypassHook")
+        if tag then tag:Destroy() end
+    end)
+    return ok
 end
 
 local function doGrappleHookThenCarpetMove(destPos, facingDir)
-	local char = LP.Character
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-	local hum  = char and char:FindFirstChildOfClass("Humanoid")
-	if not hrp then return end
-	softStabilizeHumanoid(hum)
-	local origChoice = Config.ToolChoice
-	if origChoice == "Grapple" then
-		fireGrappleOnceMouseFree()
-		task.wait(0.25)
-		Config.ToolChoice = "Carpet"
-	end
-	equipSelectedTpTool()
-	_G.VanishCarpetSpeed = Config.TpSettings.TpGrappleSpeed or 260
-	vZeroLocal(hrp)
-	local route = computeRoute(hrp.Position, destPos, facingDir)
-	local stopMove = velMoveThrough(hrp, route, Config.TpSettings.TpGrappleSpeed or 260)
-	local t0 = tick()
-	local timeout = 8
-	while tick() - t0 < timeout do
-		if not hrp or not hrp.Parent then break end
-		if (hrp.Position - destPos).Magnitude < 4 then
-			break
-		end
-		softStabilizeHumanoid(hum)
-		task.wait(0.02)
-	end
-	stopMove()
-	performFinalFix(hrp, hum, destPos, facingDir)
-	Config.ToolChoice = origChoice
-	SaveConfig()
+    local char = LP.Character
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp then return end
+    softStabilizeHumanoid(hum)
+    local origChoice = Config.ToolChoice
+    if origChoice == "Grapple" then
+        fireGrappleOnceMouseFree()
+        task.wait(0.25)
+        Config.ToolChoice = "Carpet"
+    end
+    equipSelectedTpTool()
+    _G.VanishCarpetSpeed = Config.TpSettings.TpGrappleSpeed or 260
+    vZeroLocal(hrp)
+    local route = computeRoute(hrp.Position, destPos, facingDir)
+    local stopMove = velMoveThrough(hrp, route, Config.TpSettings.TpGrappleSpeed or 260)
+    local t0 = tick()
+    local timeout = 8
+    while tick() - t0 < timeout do
+        if not hrp or not hrp.Parent then break end
+        if (hrp.Position - destPos).Magnitude < 4 then
+            break
+        end
+        softStabilizeHumanoid(hum)
+        task.wait(0.02)
+    end
+    stopMove()
+    sxeFixatePosition(hrp, destPos, facingDir)
+    Config.ToolChoice = origChoice
+    SaveConfig()
 end
 
 local isTeleporting = false
 _G.TPStatus = "idle"
 
 local function doVelocityTP()
-	if isTeleporting then return end
-	isTeleporting = true
-	_G.TPStatus = "start"
-	if not NetModule2 then pcall(loadNet) end
-	local char = LP.Character
-	local hrp = char and char:FindFirstChild("HumanoidRootPart")
-	local hum = char and char:FindFirstChildOfClass("Humanoid")
-	if not hrp or not hum then _G.TPStatus = "no_char"; isTeleporting = false; return end
-	vZeroLocal(hrp)
-	softStabilizeHumanoid(hum)
-	local selData = getPrioritySelected()
-	if not selData then
-		_G.TPStatus = "no_priority_selection"
-		isTeleporting = false
-		return
-	end
-	local savedSel = selData
-	local petPos = getBrainrotPosUnified(selData)
-	if not petPos then
-		_G.TPStatus = "no_pet_position"
-		isTeleporting = false
-		return
-	end
-	local plotName = selData.plot
-	local brainBaseName = getBaseForPlot(plotName, petPos)
-	if not brainBaseName then
-		_G.TPStatus = "no_matching_base"
-		isTeleporting = false
-		return
-	end
-	local bestEntry = getBestBasePointInBase(brainBaseName, petPos)
-	if not bestEntry then
-		_G.TPStatus = "no_point_in_base"
-		isTeleporting = false
-		return
-	end
-	local destPos   = bestEntry.pos
-	local facingDir = bestEntry.look
-	if (Config.ToolChoice or "Grapple") == "Grapple" then
-		doGrappleHookThenCarpetMove(destPos, facingDir)
-	else
-		equipSelectedTpTool()
-		_G.VanishCarpetSpeed = (Config.ToolChoice or "Grapple") == "Grapple"
-			and (Config.TpSettings.TpGrappleSpeed or 260)
-			or (Config.TpSettings.TpV2Speed or 160)
-		vZeroLocal(hrp)
-		softStabilizeHumanoid(hum)
-		local speedOverride = _G.VanishCarpetSpeed
-		local route = computeRoute(hrp.Position, destPos, facingDir)
-		local stopMove = velMoveThrough(hrp, route, speedOverride)
-		local t0 = tick()
-		local timeout = 8
-		while tick() - t0 < timeout do
-			if not hrp or not hrp.Parent then break end
-			if (hrp.Position - destPos).Magnitude < 4 then
-				break
-			end
-			softStabilizeHumanoid(hum)
-			task.wait(0.02)
-		end
-		stopMove()
-		performFinalFix(hrp, hum, destPos, facingDir)
-	end
-
-	_G.TPStatus = "at_base_before_clone"
-
-	local currentPos = hrp.Position
-	if (currentPos - destPos).Magnitude > 10 then
-		_G.TPStatus = "base_not_reached"
-		isTeleporting = false
-		return
-	end
-
-	local _ahrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-	local _ahum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-	if _ahrp and _ahrp.Parent then
-		vZeroLocal(_ahrp)
-		softStabilizeHumanoid(_ahum)
-		pcall(function() _ahrp.Anchored = true end)
-	end
-	task.wait(Config.TpSettings.CloneDelay or 0.03)
-	if _ahrp and _ahrp.Parent then pcall(function() _ahrp.Anchored = false end) end
-	softStabilizeHumanoid(_ahum)
-
-	local cloneOk = doCloneUnified()
-	if cloneOk then
-		local tpDelay = Config.TpSettings.TpWaitDelay or 0.5
-		tpDelay = math.clamp(tpDelay, 0.1, 0.9)
-		task.wait(tpDelay)
-		local chr = LP.Character
-		local cHrp = chr and chr:FindFirstChild("HumanoidRootPart")
-		local cHum = chr and chr:FindFirstChildOfClass("Humanoid")
-		if cHrp then vZeroLocal(cHrp) end
-		softStabilizeHumanoid(cHum)
-		equipAnyCarpet()
-		local mode = (Config.TpSettings.TpToBrainrotMode or "Velocity")
-		if mode == "Velocity" then
-			instantVelocityTpToBrainrot(savedSel)
-		elseif mode == "TP" then
-			quickDoubleTpToBrainrot(savedSel)
-		else
-			AfterClone_ThirdFloorAware(savedSel)
-		end
-		_G.TPStatus = "done"
-	else
-		_G.TPStatus = "clone_failed"
-	end
-
-	isTeleporting = false
+    if isTeleporting then return end
+    isTeleporting = true
+    _G.TPStatus = "start"
+    if not NetModule2 then pcall(loadNet) end
+    local char = LP.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then
+        _G.TPStatus = "no_char"
+        isTeleporting = false
+        return
+    end
+    vZeroLocal(hrp)
+    softStabilizeHumanoid(hum)
+    local selData = getPrioritySelected()
+    if not selData then
+        _G.TPStatus = "no_priority_selection"
+        isTeleporting = false
+        return
+    end
+    local savedSel = selData
+    local petPos = getBrainrotPosUnified(selData)
+    if not petPos then
+        _G.TPStatus = "no_pet_position"
+        isTeleporting = false
+        return
+    end
+    local pets = getAllPriorityPets()
+    local isPriority = false
+    if pets[1] and pets[1].plot == selData.plot and tostring(pets[1].slot) == tostring(selData.slot) then
+        isPriority = true
+    end
+    if isPriority then
+        playPrioritySound()
+    end
+    local baseIdx   = getBaseIdxByPetPos(petPos)
+    local isUpper   = petPos.Y > 7
+    local bestEntry = getBestBasePointInBase(baseIdx, isUpper, hrp.Position.Z)
+    local destPos   = bestEntry.pos
+    local facingDir = bestEntry.look
+    if (Config.ToolChoice or "Grapple") == "Grapple" then
+        doGrappleHookThenCarpetMove(destPos, facingDir)
+    else
+        equipSelectedTpTool()
+        _G.VanishCarpetSpeed = (Config.ToolChoice or "Grapple") == "Grapple"
+            and (Config.TpSettings.TpGrappleSpeed or 260)
+            or (Config.TpSettings.TpV2Speed or 160)
+        vZeroLocal(hrp)
+        softStabilizeHumanoid(hum)
+        local speedOverride = _G.VanishCarpetSpeed
+        local route = computeRoute(hrp.Position, destPos, facingDir)
+        local stopMove = velMoveThrough(hrp, route, speedOverride)
+        local t0 = tick()
+        local timeout = 8
+        while tick() - t0 < timeout do
+            if not hrp or not hrp.Parent then break end
+            if (hrp.Position - destPos).Magnitude < 4 then
+                break
+            end
+            softStabilizeHumanoid(hum)
+            task.wait(0.02)
+        end
+        stopMove()
+        vZeroLocal(hrp)
+    end
+    _G.TPStatus = "at_base_before_clone"
+    sxeFixatePosition(hrp, destPos, facingDir)
+    local currentPos = hrp.Position
+    if (currentPos - destPos).Magnitude > 10 then
+        _G.TPStatus = "base_not_reached"
+        isTeleporting = false
+        return
+    end
+    local cd = Config.TpSettings.CloneDelay or 0.03
+    cd = math.clamp(cd, 0.01, 1)
+    task.wait(cd)
+    local cloneOk = doCloneUnified()
+    if cloneOk then
+        local tpDelay = Config.TpSettings.TpWaitDelay or 0.5
+        tpDelay = math.clamp(tpDelay, 0.1, 1)
+        task.wait(tpDelay)
+        local chr  = LP.Character
+        local cHrp = chr and chr:FindFirstChild("HumanoidRootPart")
+        local cHum = chr and chr:FindFirstChildOfClass("Humanoid")
+        if cHrp then vZeroLocal(cHrp) end
+        softStabilizeHumanoid(cHum)
+        equipAnyCarpet()
+        local mode = Config.TpSettings.TpToBrainrotMode or "Velocity"
+        if mode == "Velocity" then
+            velocityTpToBrainrot(savedSel)
+        elseif mode == "TP" then
+            quickDoubleTpToBrainrot(savedSel)
+        else
+            AfterClone_ThirdFloorAware(savedSel)
+        end
+        _G.TPStatus = "done"
+    else
+        _G.TPStatus = "clone_failed"
+    end
+    isTeleporting = false
 end
 
 _G.VanishStartSideTP = doVelocityTP
@@ -1148,9 +1032,9 @@ ScreenGui.Parent = PlayerGui
 local GlobalUIScale = Instance.new("UIScale")
 GlobalUIScale.Name = "GlobalScale"
 do
-	local g = Config.GuiScale or 50
-	local alpha = (g - 20) / (100 - 20)
-	GlobalUIScale.Scale = 0.3 + (1.0 - 0.3) * alpha
+    local g = Config.GuiScale or 50
+    local alpha = (g - 20) / (100 - 20)
+    GlobalUIScale.Scale = 0.3 + (1.0 - 0.3) * alpha
 end
 GlobalUIScale.Parent = ScreenGui
 
@@ -1158,7 +1042,7 @@ local isInteractingWithSlider = false
 
 local Main = Instance.new("Frame")
 Main.Name = "Main"
-Main.Size = UDim2.new(0, 270, 0, 380)
+Main.Size = UDim2.new(0, 270, 0, 420)
 Main.Position = Config.GuiPos or UDim2.new(1, -285, 0, 70)
 Main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 Main.BorderSizePixel = 0
@@ -1246,10 +1130,10 @@ StatusText.TextXAlignment = Enum.TextXAlignment.Left
 StatusText.Parent = StatusBar
 
 task.spawn(function()
-	while Main and Main.Parent do
-		StatusText.Text = tostring(_G.TPStatus or "idle")
-		task.wait(0.1)
-	end
+    while Main and Main.Parent do
+        StatusText.Text = tostring(_G.TPStatus or "idle")
+        task.wait(0.1)
+    end
 end)
 
 local ToolFrame = Instance.new("Frame")
@@ -1274,42 +1158,42 @@ ToolLabel.Parent = ToolFrame
 local ToolButtons = {}
 
 local function refreshToolButtons()
-	for name, btn in pairs(ToolButtons) do
-		if name == Config.ToolChoice then
-			btn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
-			btn.TextColor3       = Color3.fromRGB(230, 230, 240)
-		else
-			btn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-			btn.TextColor3       = Color3.fromRGB(180, 180, 190)
-		end
-	end
+    for name, btn in pairs(ToolButtons) do
+        if name == Config.ToolChoice then
+            btn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+            btn.TextColor3       = Color3.fromRGB(230, 230, 240)
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+            btn.TextColor3       = Color3.fromRGB(180, 180, 190)
+        end
+    end
 end
 
 local function makeToolButton(text, key, xScale)
-	local b = Instance.new("TextButton")
-	b.Size = UDim2.new(0, 48, 0, 18)
-	b.Position = UDim2.new(xScale, 0, 0.5, -9)
-	b.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-	b.BorderSizePixel = 0
-	b.Text = text
-	b.Font = Enum.Font.GothamBold
-	b.TextSize = 10
-	b.TextColor3 = Color3.fromRGB(180, 180, 190)
-	b.AutoButtonColor = false
-	b.Parent = ToolFrame
-	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-	ToolButtons[key] = b
-	b.MouseButton1Click:Connect(function()
-		Config.ToolChoice        = key
-		Config.TpSettings.Tool   = GetCurrentTpToolName()
-		if key == "Grapple" then
-			_G.VanishCarpetSpeed = Config.TpSettings.TpGrappleSpeed or 260
-		else
-			_G.VanishCarpetSpeed = Config.TpSettings.TpV2Speed or 160
-		end
-		SaveConfig()
-		refreshToolButtons()
-	end)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(0, 48, 0, 18)
+    b.Position = UDim2.new(xScale, 0, 0.5, -9)
+    b.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    b.BorderSizePixel = 0
+    b.Text = text
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 10
+    b.TextColor3 = Color3.fromRGB(180, 180, 190)
+    b.AutoButtonColor = false
+    b.Parent = ToolFrame
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    ToolButtons[key] = b
+    b.MouseButton1Click:Connect(function()
+        Config.ToolChoice        = key
+        Config.TpSettings.Tool   = GetCurrentTpToolName()
+        if key == "Grapple" then
+            _G.VanishCarpetSpeed = Config.TpSettings.TpGrappleSpeed or 260
+        else
+            _G.VanishCarpetSpeed = Config.TpSettings.TpV2Speed or 160
+        end
+        SaveConfig()
+        refreshToolButtons()
+    end)
 end
 
 makeToolButton("Carpet","Carpet",0.40-0.19)
@@ -1318,12 +1202,12 @@ makeToolButton("Sleigh","Sleigh",0.40+0.19)
 makeToolButton("Wings","Wings",0.40+0.38)
 
 if not REAL_TOOL_NAMES[Config.ToolChoice] then
-	Config.ToolChoice = "Grapple"
+    Config.ToolChoice = "Grapple"
 end
 if (Config.ToolChoice or "Grapple") == "Grapple" then
-	_G.VanishCarpetSpeed = Config.TpSettings.TpGrappleSpeed or 260
+    _G.VanishCarpetSpeed = Config.TpSettings.TpGrappleSpeed or 260
 else
-	_G.VanishCarpetSpeed = Config.TpSettings.TpV2Speed or 160
+    _G.VanishCarpetSpeed = Config.TpSettings.TpV2Speed or 160
 end
 refreshToolButtons()
 
@@ -1367,9 +1251,9 @@ local waitingTpKey = false
 local TpKeyCode = Enum.KeyCode[Config.TpSettings.TpKey] or Enum.KeyCode.T
 
 TpKeyButton.MouseButton1Click:Connect(function()
-	waitingTpKey = true
-	TpKeyButton.Text = "..."
-	TpKeyButton.TextColor3 = Color3.fromRGB(0, 255, 255)
+    waitingTpKey = true
+    TpKeyButton.Text = "..."
+    TpKeyButton.TextColor3 = Color3.fromRGB(0, 255, 255)
 end)
 
 local AutoTpFrame = Instance.new("Frame")
@@ -1405,10 +1289,10 @@ AutoTpButton.Parent = AutoTpFrame
 Instance.new("UICorner", AutoTpButton).CornerRadius = UDim.new(0, 6)
 
 AutoTpButton.MouseButton1Click:Connect(function()
-	Config.AutoTpOnLoad = not Config.AutoTpOnLoad
-	AutoTpButton.Text = Config.AutoTpOnLoad and "ON" or "OFF"
-	AutoTpButton.TextColor3 = Config.AutoTpOnLoad and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
-	SaveConfig()
+    Config.AutoTpOnLoad = not Config.AutoTpOnLoad
+    AutoTpButton.Text = Config.AutoTpOnLoad and "ON" or "OFF"
+    AutoTpButton.TextColor3 = Config.AutoTpOnLoad and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+    SaveConfig()
 end)
 
 local SettingsButton = Instance.new("TextButton")
@@ -1468,77 +1352,77 @@ Instance.new("UICorner", GuiKnob).CornerRadius = UDim.new(1, 0)
 local guiDragging = false
 
 local function setGuiAlpha(a, instant)
-	a = math.clamp(a, 0, 1)
-	local value = math.floor(20 + (100 - 20) * a + 0.5)
-	Config.GuiScale = value
-	local len = GuiBar.AbsoluteSize.X
-	if len > 0 then
-		local px = a * len
-		if instant then
-			GuiFill.Size = UDim2.new(0, px, 1, 0)
-			GuiKnob.Position = UDim2.new(0, px - 5, 0.5, -5)
-		else
-			TweenService:Create(GuiFill, TweenInfo.new(0.1), {Size = UDim2.new(0, px, 1, 0)}):Play()
-			TweenService:Create(GuiKnob, TweenInfo.new(0.1), {Position = UDim2.new(0, px - 5, 0.5, -5)}):Play()
-		end
-	end
-	local scale = 0.3 + (1.0 - 0.3) * ((value - 20) / (100 - 20))
-	if instant then
-		GlobalUIScale.Scale = scale
-	else
-		TweenService:Create(GlobalUIScale, TweenInfo.new(0.15), {Scale = scale}):Play()
-	end
-	SaveConfig()
+    a = math.clamp(a, 0, 1)
+    local value = math.floor(20 + (100 - 20) * a + 0.5)
+    Config.GuiScale = value
+    local len = GuiBar.AbsoluteSize.X
+    if len > 0 then
+        local px = a * len
+        if instant then
+            GuiFill.Size = UDim2.new(0, px, 1, 0)
+            GuiKnob.Position = UDim2.new(0, px - 5, 0.5, -5)
+        else
+            TweenService:Create(GuiFill, TweenInfo.new(0.1), {Size = UDim2.new(0, px, 1, 0)}):Play()
+            TweenService:Create(GuiKnob, TweenInfo.new(0.1), {Position = UDim2.new(0, px - 5, 0.5, -5)}):Play()
+        end
+    end
+    local scale = 0.3 + (1.0 - 0.3) * ((value - 20) / (100 - 20))
+    if instant then
+        GlobalUIScale.Scale = scale
+    else
+        TweenService:Create(GlobalUIScale, TweenInfo.new(0.15), {Scale = scale}):Play()
+    end
+    SaveConfig()
 end
 
 local function updateGuiX(px)
-	local origin = GuiBar.AbsolutePosition.X
-	local len = GuiBar.AbsoluteSize.X
-	if len <= 0 then return end
-	local alpha = (px - origin) / len
-	setGuiAlpha(alpha, false)
+    local origin = GuiBar.AbsolutePosition.X
+    local len = GuiBar.AbsoluteSize.X
+    if len <= 0 then return end
+    local alpha = (px - origin) / len
+    setGuiAlpha(alpha, false)
 end
 
 GuiBar.InputBegan:Connect(function(i)
-	if i.UserInputType == Enum.UserInputType.MouseButton1 then
-		guiDragging = true
-		isInteractingWithSlider = true
-		updateGuiX(i.Position.X)
-	end
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        guiDragging = true
+        isInteractingWithSlider = true
+        updateGuiX(i.Position.X)
+    end
 end)
 
 GuiKnob.InputBegan:Connect(function(i)
-	if i.UserInputType == Enum.UserInputType.MouseButton1 then
-		guiDragging = true
-		isInteractingWithSlider = true
-	end
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        guiDragging = true
+        isInteractingWithSlider = true
+    end
 end)
 
 UserInputService.InputChanged:Connect(function(i)
-	if guiDragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-		updateGuiX(i.Position.X)
-	end
+    if guiDragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+        updateGuiX(i.Position.X)
+    end
 end)
 
 UserInputService.InputEnded:Connect(function(i)
-	if i.UserInputType == Enum.UserInputType.MouseButton1 then
-		if guiDragging then
-			guiDragging = false
-			isInteractingWithSlider = false
-		end
-	end
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        if guiDragging then
+            guiDragging = false
+            isInteractingWithSlider = false
+        end
+    end
 end)
 
 task.defer(function()
-	local g = Config.GuiScale or 50
-	local alpha = (g - 20) / (100 - 20)
-	setGuiAlpha(alpha, true)
+    local g = Config.GuiScale or 50
+    local alpha = (g - 20) / (100 - 20)
+    setGuiAlpha(alpha, true)
 end)
 
 local SettingsGui = Instance.new("Frame")
 SettingsGui.Name = "SettingsGui"
 SettingsGui.AnchorPoint = Vector2.new(0.5, 0.5)
-SettingsGui.Size = UDim2.new(0, 280, 0, 280)
+SettingsGui.Size = UDim2.new(0, 280, 0, 360)
 SettingsGui.Position = UDim2.new(0.5, 0, 0.5, 0)
 SettingsGui.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 SettingsGui.BorderSizePixel = 0
@@ -1569,160 +1453,154 @@ SettingsDivider.BorderSizePixel = 0
 SettingsDivider.Parent = SettingsGui
 
 local function makeSliderSettings(parent, y, labelText, minVal, maxVal, getValue, setValue, formatFn)
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(0.9, 0, 0, 32)
-	frame.Position = UDim2.new(0.05, 0, 0, y)
-	frame.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
-	frame.BorderSizePixel = 0
-	frame.Parent = parent
-	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(0.6, 0, 0, 16)
-	label.Position = UDim2.new(0, 8, 0, 4)
-	label.BackgroundTransparency = 1
-	label.Text = labelText
-	label.Font = Enum.Font.Gotham
-	label.TextSize = 11
-	label.TextColor3 = Color3.fromRGB(220, 220, 230)
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.Parent = frame
-	local valueLabel = Instance.new("TextLabel")
-	valueLabel.Size = UDim2.new(0, 70, 0, 16)
-	valueLabel.Position = UDim2.new(1, -78, 0, 4)
-	valueLabel.BackgroundTransparency = 1
-	valueLabel.Font = Enum.Font.GothamBold
-	valueLabel.TextSize = 11
-	valueLabel.TextColor3 = Color3.fromRGB(230, 230, 240)
-	valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-	valueLabel.Parent = frame
-	local bar = Instance.new("Frame")
-	bar.Size = UDim2.new(1, -16, 0, 6)
-	bar.Position = UDim2.new(0, 8, 1, -12)
-	bar.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-	bar.BorderSizePixel = 0
-	bar.Parent = frame
-	Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
-	local fill = Instance.new("Frame")
-	fill.Size = UDim2.new(0, 0, 1, 0)
-	fill.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-	fill.BorderSizePixel = 0
-	fill.Parent = bar
-	Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-	local knob = Instance.new("Frame")
-	knob.Size = UDim2.new(0, 10, 0, 10)
-	knob.Position = UDim2.new(0, -5, 0.5, -5)
-	knob.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
-	knob.BorderSizePixel = 0
-	knob.Parent = bar
-	Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-	local dragging = false
-	local function updateVisual(v, instant)
-		v = math.clamp(v, minVal, maxVal)
-		local alpha = (v - minVal) / (maxVal - minVal)
-		local len = bar.AbsoluteSize.X
-		local px = alpha * len
-		if formatFn then
-			valueLabel.Text = formatFn(v)
-		else
-			valueLabel.Text = string.format("%.2f", v)
-		end
-		if instant then
-			fill.Size = UDim2.new(0, px, 1, 0)
-			knob.Position = UDim2.new(0, px - 5, 0.5, -5)
-		else
-			TweenService:Create(fill, TweenInfo.new(0.1), {Size = UDim2.new(0, px, 1, 0)}):Play()
-			TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new(0, px - 5, 0.5, -5)}):Play()
-		end
-	end
-	local function setFromAlpha(alpha)
-		alpha = math.clamp(alpha, 0, 1)
-		local v = minVal + (maxVal - minVal) * alpha
-		setValue(v)
-		updateVisual(v, false)
-		SaveConfig()
-	end
-	bar.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			isInteractingWithSlider = true
-			local len = bar.AbsoluteSize.X
-			local alpha = (i.Position.X - bar.AbsolutePosition.X) / len
-			setFromAlpha(alpha)
-		end
-	end)
-	knob.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			isInteractingWithSlider = true
-		end
-	end)
-	UserInputService.InputChanged:Connect(function(i)
-		if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-			local len = bar.AbsoluteSize.X
-			local alpha = (i.Position.X - bar.AbsolutePosition.X) / len
-			setFromAlpha(alpha)
-		end
-	end)
-	UserInputService.InputEnded:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = false
-			isInteractingWithSlider = false
-		end
-	end)
-	task.defer(function()
-		updateVisual(getValue(), true)
-	end)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0.9, 0, 0, 32)
+    frame.Position = UDim2.new(0.05, 0, 0, y)
+    frame.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.6, 0, 0, 16)
+    label.Position = UDim2.new(0, 8, 0, 4)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 11
+    label.TextColor3 = Color3.fromRGB(220, 220, 230)
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Size = UDim2.new(0, 70, 0, 16)
+    valueLabel.Position = UDim2.new(1, -78, 0, 4)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.TextSize = 11
+    valueLabel.TextColor3 = Color3.fromRGB(230, 230, 240)
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    valueLabel.Parent = frame
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(1, -16, 0, 6)
+    bar.Position = UDim2.new(0, 8, 1, -12)
+    bar.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    bar.BorderSizePixel = 0
+    bar.Parent = frame
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+    fill.BorderSizePixel = 0
+    fill.Parent = bar
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 10, 0, 10)
+    knob.Position = UDim2.new(0, -5, 0.5, -5)
+    knob.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+    knob.BorderSizePixel = 0
+    knob.Parent = bar
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    local dragging = false
+    local function updateVisual(v, instant)
+        v = math.clamp(v, minVal, maxVal)
+        local alpha = (v - minVal) / (maxVal - minVal)
+        local len = bar.AbsoluteSize.X
+        local px = alpha * len
+        if formatFn then
+            valueLabel.Text = formatFn(v)
+        else
+            valueLabel.Text = string.format("%.2f", v)
+        end
+        if instant then
+            fill.Size = UDim2.new(0, px, 1, 0)
+            knob.Position = UDim2.new(0, px - 5, 0.5, -5)
+        else
+            TweenService:Create(fill, TweenInfo.new(0.1), {Size = UDim2.new(0, px, 1, 0)}):Play()
+            TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new(0, px - 5, 0.5, -5)}):Play()
+        end
+    end
+    local function setFromAlpha(alpha)
+        alpha = math.clamp(alpha, 0, 1)
+        local v = minVal + (maxVal - minVal) * alpha
+        setValue(v)
+        updateVisual(v, false)
+        SaveConfig()
+    end
+    bar.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            isInteractingWithSlider = true
+            local len = bar.AbsoluteSize.X
+            local alpha = (i.Position.X - bar.AbsolutePosition.X) / len
+            setFromAlpha(alpha)
+        end
+    end)
+    knob.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            isInteractingWithSlider = true
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local len = bar.AbsoluteSize.X
+            local alpha = (i.Position.X - bar.AbsolutePosition.X) / len
+            setFromAlpha(alpha)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+            isInteractingWithSlider = false
+        end
+    end)
+    task.defer(function()
+        updateVisual(getValue(), true)
+    end)
 end
 
 makeSliderSettings(SettingsGui, 48, "Fly TP Speed", 80, 260,
-	function() return Config.TpSettings.TpV2Speed or 160 end,
-	function(v)
-		Config.TpSettings.TpV2Speed = v
-		if (Config.ToolChoice or "Grapple") ~= "Grapple" then
-			_G.VanishCarpetSpeed = v
-		end
-	end,
-	function(v) return string.format("%d", v) end
+    function() return Config.TpSettings.TpV2Speed or 160 end,
+    function(v)
+        Config.TpSettings.TpV2Speed = v
+        if (Config.ToolChoice or "Grapple") ~= "Grapple" then
+            _G.VanishCarpetSpeed = v
+        end
+    end,
+    function(v) return string.format("%d", v) end
 )
 
 makeSliderSettings(SettingsGui, 88, "Hook TP Speed", 120, 350,
-	function() return Config.TpSettings.TpGrappleSpeed or 260 end,
-	function(v)
-		Config.TpSettings.TpGrappleSpeed = v
-		if (Config.ToolChoice or "Grapple") == "Grapple" then
-			_G.VanishCarpetSpeed = v
-		end
-	end,
-	function(v) return string.format("%d", v) end
+    function() return Config.TpSettings.TpGrappleSpeed or 260 end,
+    function(v)
+        Config.TpSettings.TpGrappleSpeed = v
+        if (Config.ToolChoice or "Grapple") == "Grapple" then
+            _G.VanishCarpetSpeed = v
+        end
+    end,
+    function(v) return string.format("%d", v) end
 )
 
-makeSliderSettings(SettingsGui, 128, "Walk To Brainrot Speed", 20, 200,
-	function() return Config.TpSettings.WalkToBrainrotSpd or 50 end,
-	function(v) Config.TpSettings.WalkToBrainrotSpd = v end,
-	function(v) return string.format("%d", v) end
+makeSliderSettings(SettingsGui, 128, "Walk To Brainrot Speed", 20, 300,
+    function() return Config.TpSettings.WalkToBrainrotSpd or 190 end,
+    function(v) Config.TpSettings.WalkToBrainrotSpd = v end,
+    function(v) return string.format("%d", v) end
 )
 
-makeSliderSettings(SettingsGui, 168, "Clone Delay", 0.01, 0.1,
-	function() return Config.TpSettings.CloneDelay or 0.03 end,
-	function(v) Config.TpSettings.CloneDelay = v end,
-	function(v) return string.format("%.2fs", v) end
+makeSliderSettings(SettingsGui, 168, "Clone Delay", 0.01, 1.0,
+    function() return Config.TpSettings.CloneDelay or 0.03 end,
+    function(v) Config.TpSettings.CloneDelay = v end,
+    function(v) return string.format("%.2fs", v) end
 )
 
-makeSliderSettings(SettingsGui, 208, "Fix Position Time", 0.01, 1,
-	function() return Config.TpSettings.FixPosTime or 0.1 end,
-	function(v) Config.TpSettings.FixPosTime = v end,
-	function(v) return string.format("%.2fs", v) end
-)
-
-makeSliderSettings(SettingsGui, 248, "TP Wait Delay", 0.1, 0.9,
-	function() return Config.TpSettings.TpWaitDelay or 0.5 end,
-	function(v) Config.TpSettings.TpWaitDelay = v end,
-	function(v) return string.format("%.2fs", v) end
+makeSliderSettings(SettingsGui, 208, "TP Wait Delay", 0.1, 1.0,
+    function() return Config.TpSettings.TpWaitDelay or 0.5 end,
+    function(v) Config.TpSettings.TpWaitDelay = v end,
+    function(v) return string.format("%.2fs", v) end
 )
 
 local BrainrotTpModeFrame = Instance.new("Frame")
 BrainrotTpModeFrame.Size = UDim2.new(0.9, 0, 0, 30)
-BrainrotTpModeFrame.Position = UDim2.new(0.05, 0, 0, 288)
+BrainrotTpModeFrame.Position = UDim2.new(0.05, 0, 0, 248)
 BrainrotTpModeFrame.BackgroundColor3 = Color3.fromRGB(16,16,20)
 BrainrotTpModeFrame.BorderSizePixel = 0
 BrainrotTpModeFrame.Parent = SettingsGui
@@ -1766,108 +1644,186 @@ VelBtn.Parent = BrainrotTpModeFrame
 Instance.new("UICorner", VelBtn).CornerRadius = UDim.new(0,6)
 
 local function updateBrainrotTpModeUI()
-	local mode = Config.TpSettings.TpToBrainrotMode or "Velocity"
-	if mode == "Velocity" then
-		Config.TpSettings.TpToBrainrotMode = "Velocity"
-		VelBtn.BackgroundColor3 = Color3.fromRGB(70,70,90)
-		VelBtn.TextColor3       = Color3.fromRGB(230,230,240)
-		WalkBtn.BackgroundColor3=Color3.fromRGB(35,35,40)
-		WalkBtn.TextColor3      = Color3.fromRGB(180,180,190)
-	else
-		Config.TpSettings.TpToBrainrotMode = "Walk"
-		WalkBtn.BackgroundColor3=Color3.fromRGB(70,70,90)
-		WalkBtn.TextColor3      = Color3.fromRGB(230,230,240)
-		VelBtn.BackgroundColor3 = Color3.fromRGB(35,35,40)
-		VelBtn.TextColor3       = Color3.fromRGB(180,180,190)
-	end
+    local mode = Config.TpSettings.TpToBrainrotMode or "Velocity"
+    if mode == "Velocity" then
+        Config.TpSettings.TpToBrainrotMode = "Velocity"
+        VelBtn.BackgroundColor3 = Color3.fromRGB(70,70,90)
+        VelBtn.TextColor3       = Color3.fromRGB(230,230,240)
+        WalkBtn.BackgroundColor3=Color3.fromRGB(35,35,40)
+        WalkBtn.TextColor3      = Color3.fromRGB(180,180,190)
+    else
+        Config.TpSettings.TpToBrainrotMode = "Walk"
+        WalkBtn.BackgroundColor3=Color3.fromRGB(70,70,90)
+        WalkBtn.TextColor3      = Color3.fromRGB(230,230,240)
+        VelBtn.BackgroundColor3 = Color3.fromRGB(35,35,40)
+        VelBtn.TextColor3       = Color3.fromRGB(180,180,190)
+    end
 end
 updateBrainrotTpModeUI()
 
 WalkBtn.MouseButton1Click:Connect(function()
-	Config.TpSettings.TpToBrainrotMode = "Walk"
-	SaveConfig()
-	updateBrainrotTpModeUI()
+    Config.TpSettings.TpToBrainrotMode = "Walk"
+    SaveConfig()
+    updateBrainrotTpModeUI()
 end)
 
 VelBtn.MouseButton1Click:Connect(function()
-	Config.TpSettings.TpToBrainrotMode = "Velocity"
-	SaveConfig()
-	updateBrainrotTpModeUI()
+    Config.TpSettings.TpToBrainrotMode = "Velocity"
+    SaveConfig()
+    updateBrainrotTpModeUI()
+end)
+
+local PrioritySoundFrame = Instance.new("Frame")
+PrioritySoundFrame.Size = UDim2.new(0.9, 0, 0, 30)
+PrioritySoundFrame.Position = UDim2.new(0.05, 0, 0, 288)
+PrioritySoundFrame.BackgroundColor3 = Color3.fromRGB(16,16,20)
+PrioritySoundFrame.BorderSizePixel = 0
+PrioritySoundFrame.Parent = SettingsGui
+Instance.new("UICorner", PrioritySoundFrame).CornerRadius = UDim.new(0, 8)
+
+local PrioritySoundLabel = Instance.new("TextLabel")
+PrioritySoundLabel.Size = UDim2.new(0.6, 0, 1, 0)
+PrioritySoundLabel.Position = UDim2.new(0, 8, 0, 0)
+PrioritySoundLabel.BackgroundTransparency = 1
+PrioritySoundLabel.Text = "Priority Sound"
+PrioritySoundLabel.Font = Enum.Font.Gotham
+PrioritySoundLabel.TextSize = 11
+PrioritySoundLabel.TextColor3 = Color3.fromRGB(220,220,230)
+PrioritySoundLabel.TextXAlignment = Enum.TextXAlignment.Left
+PrioritySoundLabel.Parent = PrioritySoundFrame
+
+local PrioritySoundBtn = Instance.new("TextButton")
+PrioritySoundBtn.Size = UDim2.new(0, 60, 0, 20)
+PrioritySoundBtn.Position = UDim2.new(1, -70, 0.5, -10)
+PrioritySoundBtn.BackgroundColor3 = Color3.fromRGB(35,35,40)
+PrioritySoundBtn.BorderSizePixel = 0
+PrioritySoundBtn.Text = Config.TpSettings.PrioritySound and "ON" or "OFF"
+PrioritySoundBtn.Font = Enum.Font.GothamBold
+PrioritySoundBtn.TextSize = 10
+PrioritySoundBtn.TextColor3 = Config.TpSettings.PrioritySound and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+PrioritySoundBtn.AutoButtonColor = false
+PrioritySoundBtn.Parent = PrioritySoundFrame
+Instance.new("UICorner", PrioritySoundBtn).CornerRadius = UDim.new(0,6)
+
+PrioritySoundBtn.MouseButton1Click:Connect(function()
+    Config.TpSettings.PrioritySound = not Config.TpSettings.PrioritySound
+    PrioritySoundBtn.Text = Config.TpSettings.PrioritySound and "ON" or "OFF"
+    PrioritySoundBtn.TextColor3 = Config.TpSettings.PrioritySound and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+    SaveConfig()
+end)
+
+local SoundIdRow = Instance.new("Frame")
+SoundIdRow.Size = UDim2.new(0.9, 0, 0, 30)
+SoundIdRow.Position = UDim2.new(0.05, 0, 0, 320)
+SoundIdRow.BackgroundColor3 = Color3.fromRGB(16,16,20)
+SoundIdRow.BorderSizePixel = 0
+SoundIdRow.Parent = SettingsGui
+Instance.new("UICorner", SoundIdRow).CornerRadius = UDim.new(0, 8)
+
+local SoundIdLabel = Instance.new("TextLabel")
+SoundIdLabel.Size = UDim2.new(0.5, 0, 1, 0)
+SoundIdLabel.Position = UDim2.new(0, 8, 0, 0)
+SoundIdLabel.BackgroundTransparency = 1
+SoundIdLabel.Text = "Sound ID"
+SoundIdLabel.Font = Enum.Font.Gotham
+SoundIdLabel.TextSize = 11
+SoundIdLabel.TextColor3 = Color3.fromRGB(220,220,230)
+SoundIdLabel.TextXAlignment = Enum.TextXAlignment.Left
+SoundIdLabel.Parent = SoundIdRow
+
+local SoundIdBox = Instance.new("TextBox")
+SoundIdBox.Size = UDim2.new(0.45, 0, 0, 20)
+SoundIdBox.Position = UDim2.new(1, -120, 0.5, -10)
+SoundIdBox.BackgroundColor3 = Color3.fromRGB(25,25,30)
+SoundIdBox.BorderSizePixel = 0
+SoundIdBox.Text = Config.TpSettings.PrioritySoundID or "94302001673909"
+SoundIdBox.Font = Enum.Font.Gotham
+SoundIdBox.TextSize = 10
+SoundIdBox.TextColor3 = Color3.fromRGB(230,230,230)
+SoundIdBox.ClearTextOnFocus = false
+SoundIdBox.Parent = SoundIdRow
+Instance.new("UICorner", SoundIdBox).CornerRadius = UDim.new(0,6)
+
+SoundIdBox.FocusLost:Connect(function()
+    local txt = SoundIdBox.Text:gsub("%s","")
+    if txt == "" then txt = "94302001673909" end
+    Config.TpSettings.PrioritySoundID = txt
+    SaveConfig()
 end)
 
 SettingsButton.MouseButton1Click:Connect(function()
-	SettingsGui.Visible = not SettingsGui.Visible
+    SettingsGui.Visible = not SettingsGui.Visible
 end)
 
-local draggingMain, dragStartMain, startPosMain = false, nil, nil
+local draggingMain, dragStartMain, startPosMain
 Main.InputBegan:Connect(function(i)
-	if isInteractingWithSlider then return end
-	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-		draggingMain = true
-		dragStartMain = i.Position
-		startPosMain = Main.Position
-	end
+    if isInteractingWithSlider then return end
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+        draggingMain = true
+        dragStartMain = i.Position
+        startPosMain = Main.Position
+    end
 end)
 UserInputService.InputChanged:Connect(function(input)
-	if draggingMain and not isInteractingWithSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-		local delta = input.Position - dragStartMain
-		Main.Position = UDim2.new(startPosMain.X.Scale, startPosMain.X.Offset + delta.X, startPosMain.Y.Scale, startPosMain.Y.Offset + delta.Y)
-	end
+    if draggingMain and not isInteractingWithSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStartMain
+        Main.Position = UDim2.new(startPosMain.X.Scale, startPosMain.X.Offset + delta.X, startPosMain.Y.Scale, startPosMain.Y.Offset + delta.Y)
+    end
 end)
 UserInputService.InputEnded:Connect(function(i)
-	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-		if draggingMain then
-			draggingMain = false
-			Config.GuiPos = Main.Position
-			SaveConfig()
-			local t = Config.TpSettings.FixPosTime or 0.1
-			if t > 0 then
-				TweenService:Create(Main, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-					Position = Main.Position
-				}):Play()
-			end
-		end
-	end
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+        if draggingMain then
+            draggingMain = false
+            Config.GuiPos = Main.Position
+            SaveConfig()
+            local t = Config.TpSettings.FixPosTime or 0.1
+            if t > 0 then
+                TweenService:Create(Main, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    Position = Main.Position
+                }):Play()
+            end
+        end
+    end
 end)
 
 UserInputService.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	if waitingTpKey and input.UserInputType == Enum.UserInputType.Keyboard then
-		waitingTpKey = false
-		local name = input.KeyCode.Name
-		if name and name ~= "Unknown" then
-			Config.TpSettings.TpKey = name
-			TpKeyCode = input.KeyCode
-			TpKeyButton.Text = name
-			TpKeyButton.TextColor3 = Color3.fromRGB(200, 200, 210)
-			SaveConfig()
-		else
-			TpKeyButton.Text = Config.TpSettings.TpKey or "T"
-			TpKeyButton.TextColor3 = Color3.fromRGB(200, 200, 210)
-		end
-		return
-	end
-	if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-	if input.KeyCode == TpKeyCode then
-		doVelocityTP()
-	end
+    if gpe then return end
+    if waitingTpKey and input.UserInputType == Enum.UserInputType.Keyboard then
+        waitingTpKey = false
+        local name = input.KeyCode.Name
+        if name and name ~= "Unknown" then
+            Config.TpSettings.TpKey = name
+            TpKeyCode = input.KeyCode
+            TpKeyButton.Text = name
+            TpKeyButton.TextColor3 = Color3.fromRGB(200, 200, 210)
+            SaveConfig()
+        else
+            TpKeyButton.Text = Config.TpSettings.TpKey or "T"
+            TpKeyButton.TextColor3 = Color3.fromRGB(200, 200, 210)
+        end
+        return
+    end
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+    if input.KeyCode == TpKeyCode then
+        doVelocityTP()
+    end
 end)
 
 if Config.AutoTpOnLoad then
-	task.spawn(function()
-		local char = LP.Character or LP.CharacterAdded:Wait()
-		char:WaitForChild("HumanoidRootPart", 5)
-		char:WaitForChild("Humanoid", 5)
-		task.wait(Config.TpSettings.TpJoinDelay or 0)
-		local t0 = tick()
-		while tick() - t0 < 3 do
-			local selData = getPrioritySelected()
-			local petPos  = selData and getBrainrotPosUnified(selData)
-			if selData and petPos then
-				doVelocityTP()
-				break
-			end
-			task.wait(0.1)
-		end
-	end)
+    task.spawn(function()
+        local char = LP.Character or LP.CharacterAdded:Wait()
+        char:WaitForChild("HumanoidRootPart", 5)
+        char:WaitForChild("Humanoid", 5)
+        task.wait(Config.TpSettings.TpJoinDelay or 0)
+        local t0 = tick()
+        while tick() - t0 < 3 do
+            local selData = getPrioritySelected()
+            local petPos  = selData and getBrainrotPosUnified(selData)
+            if selData and petPos then
+                doVelocityTP()
+                break
+            end
+            task.wait(0.1)
+        end
+    end)
 end
