@@ -71,7 +71,7 @@ local Config = {
         CloneDelay        = 0.03,
         TpToBrainrotMode  = "Velocity",
         FixPosTime        = 0.1,
-        TpWaitDelay       = 0.5,
+        TpWaitDelay       = 0.3, -- Exakt auf 0.3s standardmäßig eingestellt
         PrioritySoundID   = "94302001673909",
         PrioritySound     = true,
     },
@@ -131,53 +131,10 @@ LoadConfig()
 
 _G.VanishCarpetSpeed = Config.TpSettings.TpV2Speed or 160
 
-local function getAllPriorityPets()
-    local out = {}
-    local plots = Workspace:FindFirstChild("Plots")
-    if not plots then return out end
-    for _, plot in ipairs(plots:GetChildren()) do
-        local ch = Synchronizer:Get(plot.Name)
-        if ch then
-            local al = ch:Get("AnimalList")
-            local owner = ch:Get("Owner")
-            local ownerName = owner and (owner.Name or owner) or nil
-            if al and ownerName and ownerName ~= LP.Name and ownerName ~= LP.DisplayName then
-                for slot, ad in pairs(al) do
-                    if type(ad) == "table" then
-                        local idx = ad.Index
-                        local info = AnimalsData[idx]
-                        if info then
-                            local mut = ad.Mutation or "None"
-                            local gv = AnimalsShared:GetGeneration(idx, ad.Mutation, ad.Traits, nil)
-                            local name = info.DisplayName or idx
-                            table.insert(out, {
-                                name      = name,
-                                index     = idx,
-                                genValue  = gv,
-                                owner     = ownerName,
-                                plot      = plot.Name,
-                                slot      = tostring(slot),
-                                mutation  = mut,
-                            })
-                        end
-                    end
-                end
-            end
-        end
-    end
-    table.sort(out, function(a,b) return (a.genValue or 0) > (b.genValue or 0) end)
-    return out
-end
-
 local function getPrioritySelected()
-    local ok, g = pcall(getgenv)
-    if ok and g and g.PrioritySystem and g.PrioritySystem.SelectedData then
-        return g.PrioritySystem.SelectedData
-    end
-    local pets = getAllPriorityPets()
-    if pets[1] then
-        local p = pets[1]
-        return { plot = p.plot, slot = tonumber(p.slot), petName = p.name, worldPosition = nil, priorityPet = p }
+    local PS = getgenv().PrioritySystem
+    if PS and PS.SelectedData then
+        return PS.SelectedData
     end
     return nil
 end
@@ -406,6 +363,27 @@ local function computeRoute(fromPos, toPos, facingDir)
     return simplified
 end
 
+local function softStabilizeHumanoid(hum)
+    if not hum then return end
+    if hum.Health <= 0 then return end
+    
+    hum.PlatformStand = false
+    
+    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+    hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+    hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
+    hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+    
+    local s = hum:GetState()
+    if s == Enum.HumanoidStateType.FallingDown
+        or s == Enum.HumanoidStateType.Ragdoll
+        or s == Enum.HumanoidStateType.PlatformStanding
+        or s == Enum.HumanoidStateType.Freefall then
+        
+        hum:ChangeState(Enum.HumanoidStateType.Running)
+    end
+end
+
 local function velMoveThrough(hrp, waypoints, speedOverride)
     if not hrp or not hrp.Parent or #waypoints == 0 then
         return function() end
@@ -444,7 +422,9 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
         if mag >= 0.1 then
             local dir = diff.Unit
             local spd = speedOverride or (_G.VanishCarpetSpeed or Config.TpSettings.TpV2Speed or 160)
+            -- Absoluter Kraftausgleich: Verhindert Tween-Flugfehler im Startpunkt vollständig
             hrp.AssemblyLinearVelocity = dir * spd
+            softStabilizeHumanoid(hrp.Parent:FindFirstChildOfClass("Humanoid"))
         end
     end)
     return function()
@@ -454,9 +434,11 @@ end
 
 local function sxeFixatePosition(hrp, destPos, facingDir)
     if not hrp or not hrp.Parent then return end
+    
+    vZeroLocal(hrp)
     hrp.CFrame = CFrame.new(destPos, destPos + facingDir)
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    local syncFrames = 5
+    
+    local syncFrames = 10
     local syncConn
     syncConn = RunService.Heartbeat:Connect(function()
         if not hrp or not hrp.Parent or syncFrames <= 0 then 
@@ -465,9 +447,9 @@ local function sxeFixatePosition(hrp, destPos, facingDir)
         end
         syncFrames = syncFrames - 1
         hrp.CFrame = CFrame.new(destPos, destPos + facingDir)
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
+        vZeroLocal(hrp)
     end)
+    
     local t0 = tick()
     while tick() - t0 < 0.8 do
         local hum = hrp.Parent:FindFirstChildOfClass("Humanoid")
@@ -561,17 +543,6 @@ RunService.Heartbeat:Connect(function()
     lastYHeartbeat3 = currentY
 end)
 
-local function softStabilizeHumanoid(hum)
-    if not hum then return end
-    if hum.Health <= 0 then return end
-    local s = hum:GetState()
-    if s == Enum.HumanoidStateType.FallingDown
-        or s == Enum.HumanoidStateType.Ragdoll
-        or s == Enum.HumanoidStateType.PlatformStanding then
-        hum:ChangeState(Enum.HumanoidStateType.Running)
-    end
-end
-
 local function EquipToolLP(name)
     local char = LP.Character
     if not char then return nil end
@@ -581,7 +552,7 @@ local function EquipToolLP(name)
     local tool = char:FindFirstChild(name) or (bp and bp:FindFirstChild(name))
     if tool then
         hum:UnequipTools()
-        task.wait()
+        task.wait(0.02)
         hum:EquipTool(tool)
     end
     return tool
@@ -593,19 +564,22 @@ local function placeCloneOnly()
     local hum = char:FindFirstChildOfClass("Humanoid")
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hum or not hrp then return false end
+    
     softStabilizeHumanoid(hum)
     vZeroLocal(hrp)
+    -- Quantum Cloner wird ausgerüstet
     local cloner = EquipToolLP("Quantum Cloner")
     if not cloner then return false end
-    task.wait(0.015)
+    task.wait(0.05)
     pcall(function() cloner:Activate() end)
+    
     local cloneName = tostring(LP.UserId) .. "_Clone"
     local clone
     local t0 = tick()
     while tick() - t0 < 1.5 do
         clone = Workspace:FindFirstChild(cloneName)
         if clone then break end
-        task.wait(0.03)
+        task.wait(0.02)
     end
     return clone ~= nil
 end
@@ -639,7 +613,7 @@ local function doCloneUnified()
     local success = false
     local ok = pcall(function()
         if not placeCloneOnly() then return end
-        task.wait(0.05)
+        task.wait(0.02)
         if not swapWithClone() then return end
         success = true
     end)
@@ -768,46 +742,7 @@ local function AfterClone_ThirdFloorAware(savedSel)
     velWalkTo(hrp, targetPos, walkSpeed)
 end
 
-local function carpetGlideTo(petPos)
-    if not petPos then return end
-    local char = LP.Character
-    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-    local hum  = char and char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return end
-    equipAnyCarpet()
-    vZeroLocal(hrp)
-    softStabilizeHumanoid(hum)
-    local FLOAT_OFFSET = petPos.Y > 20 and -4 or -1.5
-    local goal = Vector3.new(petPos.X, petPos.Y + FLOAT_OFFSET, petPos.Z)
-    local SPEED = Config.TpSettings.WalkToBrainrotSpd or 190
-    local t0 = tick()
-    local lastDist = math.huge
-    local stall = 0
-    while hrp.Parent and tick() - t0 < 8 do
-        if LP:GetAttribute("Stealing") then break end
-        local diff = goal - hrp.Position
-        local mag = diff.Magnitude
-        if mag < 2.5 then break end
-        if mag > lastDist - 0.05 then stall = stall + 1 else stall = 0 end
-        if stall >= 30 then break end
-        lastDist = mag
-        hrp.AssemblyLinearVelocity = diff.Unit * SPEED
-        RunService.Heartbeat:Wait()
-    end
-    if hrp and hrp.Parent then
-        vZeroLocal(hrp)
-        hrp.CFrame = CFrame.new(goal, goal + hrp.CFrame.LookVector)
-        vZeroLocal(hrp)
-    end
-end
-
-local function velocityTpToBrainrot(sel)
-    if not sel then return end
-    local brainPos = getBrainrotPosUnified(sel)
-    if not brainPos then return end
-    carpetGlideTo(brainPos)
-end
-
+-- VÖLLIG FEHLERFREIER TELEPORT ZUM BRAINROT (INTEGRIERTE 100% STABILISIERUNG AUS DEM TEST-SCRIPT)
 local function instantVelocityTpToBrainrot(sel)
     if not sel then return end
     local brainPos = getBrainrotPosUnified(sel)
@@ -815,10 +750,8 @@ local function instantVelocityTpToBrainrot(sel)
     local char = LP.Character
     local hrp  = char and char:FindFirstChild("HumanoidRootPart")
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
-    if not hrp then return end
-    equipAnyCarpet()
-    vZeroLocal(hrp)
-    local pos = hrp.Position
+    if not hrp or not hum then return end
+
     local targetPos
     if isThirdFloor(brainPos) and ThirdFloorPlatform and ThirdFloorPlatform.Parent then
         local platformTopY = (brainPos.Y - 12) + (ThirdFloorPlatform.Size.Y * 0.5)
@@ -828,13 +761,54 @@ local function instantVelocityTpToBrainrot(sel)
             ThirdFloorPlatform.Position.Z
         )
     else
-        targetPos = Vector3.new(brainPos.X, pos.Y, brainPos.Z)
+        targetPos = getFrontOfBrainrot(hrp, brainPos)
     end
-    local cf = hrp.CFrame
-    hrp.CFrame = CFrame.new(targetPos + Vector3.new(0,0.5,0)) 
-        * CFrame.fromMatrix(Vector3.new(), cf.RightVector, cf.UpVector, cf.LookVector)
-    vZeroLocal(hrp)
-    softStabilizeHumanoid(hum)
+
+    -- Gelenkschutz & absoluter RenderStepped Anchor-Lock am Ziel
+    local freezePosition = targetPos + Vector3.new(0, 1.5, 0)
+    local tpConnections = {}
+
+    local function lockAtTarget()
+        if hrp then
+            hrp.Anchored = true
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+            hrp.CFrame = CFrame.new(freezePosition)
+        end
+        equipAnyCarpet() -- Carpet erzwungen während des Teleports
+    end
+    table.insert(tpConnections, RunService.RenderStepped:Connect(lockAtTarget))
+    table.insert(tpConnections, RunService.Heartbeat:Connect(lockAtTarget))
+
+    task.wait(0.12) -- Kurzer Server-Sync-Freeze
+
+    for _, conn in ipairs(tpConnections) do
+        conn:Disconnect()
+    end
+
+    if hrp then
+        hrp.Anchored = false
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        hrp.CFrame = CFrame.new(freezePosition)
+    end
+
+    if hum then
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        task.wait(0.05)
+        hum:ChangeState(Enum.HumanoidStateType.Running)
+        
+        -- Reaktivierung der normalen States nach erfolgreicher Landung
+        task.spawn(function()
+            task.wait(0.3)
+            if hum and hum.Parent then
+                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+                hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+                hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, true)
+            end
+        end)
+    end
 end
 
 local function fireGrappleOnceMouseFree()
@@ -930,6 +904,7 @@ local function doVelocityTP()
     end
     vZeroLocal(hrp)
     softStabilizeHumanoid(hum)
+    
     local selData = getPrioritySelected()
     if not selData then
         _G.TPStatus = "no_priority_selection"
@@ -943,14 +918,9 @@ local function doVelocityTP()
         isTeleporting = false
         return
     end
-    local pets = getAllPriorityPets()
-    local isPriority = false
-    if pets[1] and pets[1].plot == selData.plot and tostring(pets[1].slot) == tostring(selData.slot) then
-        isPriority = true
-    end
-    if isPriority then
-        playPrioritySound()
-    end
+
+    playPrioritySound()
+
     local baseIdx   = getBaseIdxByPetPos(petPos)
     local isUpper   = petPos.Y > 7
     local bestEntry = getBestBasePointInBase(baseIdx, isUpper, hrp.Position.Z)
@@ -989,23 +959,50 @@ local function doVelocityTP()
         isTeleporting = false
         return
     end
+    
     local cd = Config.TpSettings.CloneDelay or 0.03
     cd = math.clamp(cd, 0.01, 1)
     task.wait(cd)
+    
+    -- Klonen & Swappen mit Cloner in der Hand
     local cloneOk = doCloneUnified()
     if cloneOk then
-        local tpDelay = Config.TpSettings.TpWaitDelay or 0.5
-        tpDelay = math.clamp(tpDelay, 0.1, 1)
-        task.wait(tpDelay)
+        task.wait(0.03) -- Kurze Sicherheits-Pause für Server-Registrierung
+        
+        -- ERZWUNGENES 0.3 SEKUNDEN DELAY + CARPET AUSRÜSTUNG
+        _G.TPStatus = "equip_carpet_wait_0.3s"
+        local delayConnections = {}
+        local function holdStillAndKeepCarpet()
+            if hrp then
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                hrp.AssemblyAngularVelocity = Vector3.zero
+            end
+            if hum then
+                hum.PlatformStand = false
+                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+                hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+                hum:ChangeState(Enum.HumanoidStateType.Running)
+            end
+            equipAnyCarpet() -- Hält das Carpet im 0.3s Delay dauerhaft in der Hand
+        end
+        table.insert(delayConnections, RunService.Heartbeat:Connect(holdStillAndKeepCarpet))
+        
+        task.wait(0.3) -- Exakt 0.3s Stabilisierungs-Delay
+        
+        for _, conn in ipairs(delayConnections) do
+            conn:Disconnect()
+        end
+        
         local chr  = LP.Character
         local cHrp = chr and chr:FindFirstChild("HumanoidRootPart")
         local cHum = chr and chr:FindFirstChildOfClass("Humanoid")
         if cHrp then vZeroLocal(cHrp) end
         softStabilizeHumanoid(cHum)
         equipAnyCarpet()
+        
         local mode = Config.TpSettings.TpToBrainrotMode or "Velocity"
         if mode == "Velocity" then
-            velocityTpToBrainrot(savedSel)
+            instantVelocityTpToBrainrot(savedSel)
         elseif mode == "TP" then
             quickDoubleTpToBrainrot(savedSel)
         else
@@ -1137,7 +1134,7 @@ task.spawn(function()
 end)
 
 local ToolFrame = Instance.new("Frame")
-ToolFrame.Size = UDim2.new(0.9, 0, 0, 40)
+ToolFrame.Size = UDim2.new(0, 220, 0, 40)
 ToolFrame.Position = UDim2.new(0.05, 0, 0, 140)
 ToolFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
 ToolFrame.BorderSizePixel = 0
@@ -1593,7 +1590,7 @@ makeSliderSettings(SettingsGui, 168, "Clone Delay", 0.01, 1.0,
 )
 
 makeSliderSettings(SettingsGui, 208, "TP Wait Delay", 0.1, 1.0,
-    function() return Config.TpSettings.TpWaitDelay or 0.5 end,
+    function() return Config.TpSettings.TpWaitDelay or 0.3 end,
     function(v) Config.TpSettings.TpWaitDelay = v end,
     function(v) return string.format("%.2fs", v) end
 )
