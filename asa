@@ -27,13 +27,21 @@ local PlayerMouse   = require(Packages:WaitForChild("PlayerMouse"))
 local SAVE_KEY = "ENZO_TP_PANEL_" .. LP.UserId
 
 local REAL_TOOL_NAMES = {
-    Carpet  = "Flying Carpet",
-    Grapple = "Grapple Hook",
-    Sleigh  = "Santa's Sleigh",
-    Wings   = "Wings",
+    Carpet     = "Flying Carpet",
+    Grapple    = "Grapple Hook",
+    Sleigh     = "Santa's Sleigh",
+    Wings      = "Cupid's Wings",
+    Broom      = "Witch's Broom",
+    Waverider  = "Waverider"
 }
 
-local CARPET_NAMES = { "Flying Carpet", "Santa's Sleigh", "Wings" }
+local CARPET_NAMES = { 
+    "Flying Carpet", 
+    "Santa's Sleigh", 
+    "Cupid's Wings", 
+    "Witch's Broom", 
+    "Waverider" 
+}
 
 local BASES_LOW = {
     [1]=Vector3.new(-476.52,-2,220.94),[2]=Vector3.new(-476.52,-2,113.77),
@@ -71,9 +79,10 @@ local Config = {
         CloneDelay        = 0.03,
         TpToBrainrotMode  = "Velocity",
         FixPosTime        = 0.1,
-        TpWaitDelay       = 0.3, -- Exakt auf 0.3s standardmäßig eingestellt
+        TpWaitDelay       = 0.3,
         PrioritySoundID   = "94302001673909",
         PrioritySound     = true,
+        TpFloor1WhenFloor2= true, -- Neuer default Wert
     },
     TpAfterHit    = false,
     AutoTpOnLoad  = false,
@@ -422,7 +431,6 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
         if mag >= 0.1 then
             local dir = diff.Unit
             local spd = speedOverride or (_G.VanishCarpetSpeed or Config.TpSettings.TpV2Speed or 160)
-            -- Absoluter Kraftausgleich: Verhindert Tween-Flugfehler im Startpunkt vollständig
             hrp.AssemblyLinearVelocity = dir * spd
             softStabilizeHumanoid(hrp.Parent:FindFirstChildOfClass("Humanoid"))
         end
@@ -476,6 +484,7 @@ local function getBestBasePointInBase(idx, isUpper, playerZ)
     return { pos = coord, look = faceDir }
 end
 
+-- ETAGE 3 PLATTFORM
 local ThirdFloorPlatform = Instance.new("Part")
 ThirdFloorPlatform.Name         = "ENZO_TP_ThirdFloor_Floor"
 ThirdFloorPlatform.Size         = Vector3.new(8, 1, 8)
@@ -491,27 +500,65 @@ local function isThirdFloor(brainPos)
     return brainPos and brainPos.Y > 20
 end
 
-local function updateThirdFloorPlatform()
+-- ETAGE 2 FILTER (8.0 BIS 11.0 Y) & PLATTFORM (11 STUDS ABSTAND)
+local SecondFloorPlatform = Instance.new("Part")
+SecondFloorPlatform.Name         = "ENZO_TP_SecondFloor_Floor"
+SecondFloorPlatform.Size         = Vector3.new(8, 1, 8)
+SecondFloorPlatform.Anchored     = true
+SecondFloorPlatform.CanCollide   = false
+SecondFloorPlatform.Material     = Enum.Material.SmoothPlastic
+SecondFloorPlatform.Color        = Color3.fromRGB(255, 0, 0)
+SecondFloorPlatform.Transparency = 0.5
+SecondFloorPlatform.CFrame       = CFrame.new(0, -1000, 0)
+SecondFloorPlatform.Parent       = Workspace
+
+local function isSecondFloor(brainPos)
+    return brainPos and brainPos.Y >= 8.0 and brainPos.Y <= 11.0
+end
+
+local function updateFloorPlatforms()
     local sel = getPrioritySelected()
     if not sel then
         ThirdFloorPlatform.CFrame = CFrame.new(0, -1000, 0)
         ThirdFloorPlatform.CanCollide = false
+        SecondFloorPlatform.CFrame = CFrame.new(0, -1000, 0)
+        SecondFloorPlatform.CanCollide = false
         return
     end
     local brainPos = getBrainrotPosUnified(sel)
-    if not brainPos or not isThirdFloor(brainPos) then
+    if not brainPos then
         ThirdFloorPlatform.CFrame = CFrame.new(0, -1000, 0)
         ThirdFloorPlatform.CanCollide = false
+        SecondFloorPlatform.CFrame = CFrame.new(0, -1000, 0)
+        SecondFloorPlatform.CanCollide = false
         return
     end
-    local airPos = Vector3.new(brainPos.X, brainPos.Y - 7.5, brainPos.Z)
-    ThirdFloorPlatform.Position   = airPos - Vector3.new(0, 4.5, 0)
-    ThirdFloorPlatform.CanCollide = true
+
+    -- Update Etage 3 Plattform
+    if isThirdFloor(brainPos) then
+        local airPos = Vector3.new(brainPos.X, brainPos.Y - 7.5, brainPos.Z)
+        ThirdFloorPlatform.Position   = airPos - Vector3.new(0, 4.5, 0)
+        ThirdFloorPlatform.CanCollide = true
+    else
+        ThirdFloorPlatform.CFrame = CFrame.new(0, -1000, 0)
+        ThirdFloorPlatform.CanCollide = false
+    end
+
+    -- Update Etage 2 Plattform (Nur wenn in den Settings aktiviert!)
+    if isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2 then
+        -- Exakt 11 Studs tiefer platziert
+        local targetY = brainPos.Y - 11
+        SecondFloorPlatform.Position = Vector3.new(brainPos.X, targetY, brainPos.Z)
+        SecondFloorPlatform.CanCollide = true
+    else
+        SecondFloorPlatform.CFrame = CFrame.new(0, -1000, 0)
+        SecondFloorPlatform.CanCollide = false
+    end
 end
 
 task.spawn(function()
-    while ThirdFloorPlatform and ThirdFloorPlatform.Parent do
-        pcall(updateThirdFloorPlatform)
+    while Workspace and Workspace.Parent do
+        pcall(updateFloorPlatforms)
         task.wait(0.1)
     end
 end)
@@ -520,24 +567,35 @@ local lastYHeartbeat3
 RunService.Heartbeat:Connect(function()
     local char = LP.Character
     local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp or not ThirdFloorPlatform then
+    if not hrp then
         lastYHeartbeat3 = nil
         return
     end
     local currentY = hrp.Position.Y
-    local topY     = ThirdFloorPlatform.Position.Y + ThirdFloorPlatform.Size.Y * 0.5
-    if not lastYHeartbeat3 then
-        lastYHeartbeat3 = currentY
-        return
+    
+    -- Gurtung für Etage 3
+    if ThirdFloorPlatform then
+        local topY = ThirdFloorPlatform.Position.Y + ThirdFloorPlatform.Size.Y * 0.5
+        if lastYHeartbeat3 and currentY > lastYHeartbeat3 then
+            if lastYHeartbeat3 < topY and currentY < topY + 5 then
+                ThirdFloorPlatform.CanCollide = false
+                task.delay(0.08, function()
+                    if ThirdFloorPlatform then ThirdFloorPlatform.CanCollide = true end
+                end)
+            end
+        end
     end
-    if currentY > lastYHeartbeat3 then
-        if lastYHeartbeat3 < topY and currentY < topY + 5 then
-            ThirdFloorPlatform.CanCollide = false
-            task.delay(0.08, function()
-                if ThirdFloorPlatform then
-                    ThirdFloorPlatform.CanCollide = true
-                end
-            end)
+
+    -- Gurtung für Etage 2
+    if SecondFloorPlatform then
+        local topY2 = SecondFloorPlatform.Position.Y + SecondFloorPlatform.Size.Y * 0.5
+        if lastYHeartbeat3 and currentY > lastYHeartbeat3 then
+            if lastYHeartbeat3 < topY2 and currentY < topY2 + 5 then
+                SecondFloorPlatform.CanCollide = false
+                task.delay(0.08, function()
+                    if SecondFloorPlatform then SecondFloorPlatform.CanCollide = true end
+                end)
+            end
         end
     end
     lastYHeartbeat3 = currentY
@@ -567,7 +625,6 @@ local function placeCloneOnly()
     
     softStabilizeHumanoid(hum)
     vZeroLocal(hrp)
-    -- Quantum Cloner wird ausgerüstet
     local cloner = EquipToolLP("Quantum Cloner")
     if not cloner then return false end
     task.wait(0.05)
@@ -705,6 +762,8 @@ local function AfterClone_ThirdFloorAware(savedSel)
     equipAnyCarpet()
     vZeroLocal(hrp)
     softStabilizeHumanoid(hum)
+
+    -- Schutz für Etage 3 Plattform
     if isThirdFloor(brainPos) and ThirdFloorPlatform and ThirdFloorPlatform.CanCollide then
         local airPos = Vector3.new(brainPos.X, brainPos.Y - 7.5, brainPos.Z)
         local target = airPos + Vector3.new(0, 2.5, 0)
@@ -737,12 +796,45 @@ local function AfterClone_ThirdFloorAware(savedSel)
         softStabilizeHumanoid(hum)
         return
     end
+
+    -- Schutz für Etage 2 Plattform
+    if isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2 and SecondFloorPlatform and SecondFloorPlatform.CanCollide then
+        local target = Vector3.new(brainPos.X, brainPos.Y - 11 + 1.0, brainPos.Z)
+        local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
+        local done = false
+        local conn
+        conn = RunService.Heartbeat:Connect(function()
+            if not hrp or not hrp.Parent then
+                if conn then conn:Disconnect() end
+                return
+            end
+            local diff = target - hrp.Position
+            local dist = diff.Magnitude
+            if dist < 0.8 then
+                done = true
+                vZeroLocal(hrp)
+                if conn then conn:Disconnect() end
+                return
+            end
+            hrp.AssemblyLinearVelocity = diff.Unit * walkSpeed
+            softStabilizeHumanoid(hum)
+        end)
+        local t0 = tick()
+        local timeout = 6
+        while not done and tick() - t0 < timeout do
+            task.wait(0.05)
+        end
+        if conn then conn:Disconnect() end
+        vZeroLocal(hrp)
+        softStabilizeHumanoid(hum)
+        return
+    end
+
     local targetPos = getFrontOfBrainrot(hrp, brainPos)
     local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
     velWalkTo(hrp, targetPos, walkSpeed)
 end
 
--- VÖLLIG FEHLERFREIER TELEPORT ZUM BRAINROT (INTEGRIERTE 100% STABILISIERUNG AUS DEM TEST-SCRIPT)
 local function instantVelocityTpToBrainrot(sel)
     if not sel then return end
     local brainPos = getBrainrotPosUnified(sel)
@@ -760,11 +852,17 @@ local function instantVelocityTpToBrainrot(sel)
             platformTopY + 3,
             ThirdFloorPlatform.Position.Z
         )
+    elseif isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2 and SecondFloorPlatform and SecondFloorPlatform.Parent then
+        -- Landung exakt auf der generierten Plattform unter Etage 2
+        targetPos = Vector3.new(
+            SecondFloorPlatform.Position.X,
+            (brainPos.Y - 11) + 1.5,
+            SecondFloorPlatform.Position.Z
+        )
     else
         targetPos = getFrontOfBrainrot(hrp, brainPos)
     end
 
-    -- Gelenkschutz & absoluter RenderStepped Anchor-Lock am Ziel
     local freezePosition = targetPos + Vector3.new(0, 1.5, 0)
     local tpConnections = {}
 
@@ -775,12 +873,12 @@ local function instantVelocityTpToBrainrot(sel)
             hrp.AssemblyAngularVelocity = Vector3.zero
             hrp.CFrame = CFrame.new(freezePosition)
         end
-        equipAnyCarpet() -- Carpet erzwungen während des Teleports
+        equipAnyCarpet()
     end
     table.insert(tpConnections, RunService.RenderStepped:Connect(lockAtTarget))
     table.insert(tpConnections, RunService.Heartbeat:Connect(lockAtTarget))
 
-    task.wait(0.12) -- Kurzer Server-Sync-Freeze
+    task.wait(0.12)
 
     for _, conn in ipairs(tpConnections) do
         conn:Disconnect()
@@ -799,7 +897,6 @@ local function instantVelocityTpToBrainrot(sel)
         task.wait(0.05)
         hum:ChangeState(Enum.HumanoidStateType.Running)
         
-        -- Reaktivierung der normalen States nach erfolgreicher Landung
         task.spawn(function()
             task.wait(0.3)
             if hum and hum.Parent then
@@ -922,7 +1019,13 @@ local function doVelocityTP()
     playPrioritySound()
 
     local baseIdx   = getBaseIdxByPetPos(petPos)
+    
+    -- Wenn "Tp Floor 1 when Floor 2" aktiv ist, weichen wir bei Etage 2 auf die untere Basis (LOW) aus!
     local isUpper   = petPos.Y > 7
+    if isSecondFloor(petPos) and Config.TpSettings.TpFloor1WhenFloor2 then
+        isUpper = false
+    end
+    
     local bestEntry = getBestBasePointInBase(baseIdx, isUpper, hrp.Position.Z)
     local destPos   = bestEntry.pos
     local facingDir = bestEntry.look
@@ -964,12 +1067,10 @@ local function doVelocityTP()
     cd = math.clamp(cd, 0.01, 1)
     task.wait(cd)
     
-    -- Klonen & Swappen mit Cloner in der Hand
     local cloneOk = doCloneUnified()
     if cloneOk then
-        task.wait(0.03) -- Kurze Sicherheits-Pause für Server-Registrierung
+        task.wait(0.03)
         
-        -- ERZWUNGENES 0.3 SEKUNDEN DELAY + CARPET AUSRÜSTUNG
         _G.TPStatus = "equip_carpet_wait_0.3s"
         local delayConnections = {}
         local function holdStillAndKeepCarpet()
@@ -983,11 +1084,11 @@ local function doVelocityTP()
                 hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
                 hum:ChangeState(Enum.HumanoidStateType.Running)
             end
-            equipAnyCarpet() -- Hält das Carpet im 0.3s Delay dauerhaft in der Hand
+            equipAnyCarpet()
         end
         table.insert(delayConnections, RunService.Heartbeat:Connect(holdStillAndKeepCarpet))
         
-        task.wait(0.3) -- Exakt 0.3s Stabilisierungs-Delay
+        task.wait(0.3)
         
         for _, conn in ipairs(delayConnections) do
             conn:Disconnect()
@@ -1134,7 +1235,7 @@ task.spawn(function()
 end)
 
 local ToolFrame = Instance.new("Frame")
-ToolFrame.Size = UDim2.new(0, 220, 0, 40)
+ToolFrame.Size = UDim2.new(0.9, 0, 0, 40)
 ToolFrame.Position = UDim2.new(0.05, 0, 0, 140)
 ToolFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
 ToolFrame.BorderSizePixel = 0
@@ -1142,12 +1243,12 @@ ToolFrame.Parent = Main
 Instance.new("UICorner", ToolFrame).CornerRadius = UDim.new(0, 8)
 
 local ToolLabel = Instance.new("TextLabel")
-ToolLabel.Size = UDim2.new(0.35, 0, 1, 0)
+ToolLabel.Size = UDim2.new(0.24, 0, 1, 0)
 ToolLabel.Position = UDim2.new(0, 8, 0, 0)
 ToolLabel.BackgroundTransparency = 1
 ToolLabel.Text = "TP Tool"
 ToolLabel.Font = Enum.Font.Gotham
-ToolLabel.TextSize = 12
+ToolLabel.TextSize = 11
 ToolLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
 ToolLabel.TextXAlignment = Enum.TextXAlignment.Left
 ToolLabel.Parent = ToolFrame
@@ -1166,19 +1267,19 @@ local function refreshToolButtons()
     end
 end
 
-local function makeToolButton(text, key, xScale)
+local function makeToolButton(text, key, xScale, width)
     local b = Instance.new("TextButton")
-    b.Size = UDim2.new(0, 48, 0, 18)
+    b.Size = UDim2.new(0, width, 0, 18)
     b.Position = UDim2.new(xScale, 0, 0.5, -9)
     b.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
     b.BorderSizePixel = 0
     b.Text = text
     b.Font = Enum.Font.GothamBold
-    b.TextSize = 10
+    b.TextSize = 9
     b.TextColor3 = Color3.fromRGB(180, 180, 190)
     b.AutoButtonColor = false
     b.Parent = ToolFrame
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
     ToolButtons[key] = b
     b.MouseButton1Click:Connect(function()
         Config.ToolChoice        = key
@@ -1193,10 +1294,12 @@ local function makeToolButton(text, key, xScale)
     end)
 end
 
-makeToolButton("Carpet","Carpet",0.40-0.19)
-makeToolButton("Hook","Grapple",0.40)
-makeToolButton("Sleigh","Sleigh",0.40+0.19)
-makeToolButton("Wings","Wings",0.40+0.38)
+makeToolButton("Carpet", "Carpet",     0.26, 32)
+makeToolButton("Hook",   "Grapple",    0.40, 28)
+makeToolButton("Sleigh", "Sleigh",     0.53, 30)
+makeToolButton("Wings",  "Wings",      0.67, 28)
+makeToolButton("Broom",  "Broom",      0.80, 28)
+makeToolButton("Wave",   "Waverider",  0.92, 28)
 
 if not REAL_TOOL_NAMES[Config.ToolChoice] then
     Config.ToolChoice = "Grapple"
@@ -1416,10 +1519,11 @@ task.defer(function()
     setGuiAlpha(alpha, true)
 end)
 
+-- SETTINGS MENU (Leicht vergrößert für den neuen Button)
 local SettingsGui = Instance.new("Frame")
 SettingsGui.Name = "SettingsGui"
 SettingsGui.AnchorPoint = Vector2.new(0.5, 0.5)
-SettingsGui.Size = UDim2.new(0, 280, 0, 360)
+SettingsGui.Size = UDim2.new(0, 280, 0, 395) -- Höhe von 360 auf 395 vergrößert
 SettingsGui.Position = UDim2.new(0.5, 0, 0.5, 0)
 SettingsGui.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 SettingsGui.BorderSizePixel = 0
@@ -1672,7 +1776,7 @@ end)
 
 local PrioritySoundFrame = Instance.new("Frame")
 PrioritySoundFrame.Size = UDim2.new(0.9, 0, 0, 30)
-PrioritySoundFrame.Position = UDim2.new(0.05, 0, 0, 288)
+PrioritySoundFrame.Position = UDim2.new(0.05, 0, 0, 282)
 PrioritySoundFrame.BackgroundColor3 = Color3.fromRGB(16,16,20)
 PrioritySoundFrame.BorderSizePixel = 0
 PrioritySoundFrame.Parent = SettingsGui
@@ -1709,9 +1813,49 @@ PrioritySoundBtn.MouseButton1Click:Connect(function()
     SaveConfig()
 end)
 
+-- NEUE EINSTELLUNG: "Tp Floor 1 when Floor 2" BUTTON
+local Floor1When2Frame = Instance.new("Frame")
+Floor1When2Frame.Size = UDim2.new(0.9, 0, 0, 30)
+Floor1When2Frame.Position = UDim2.new(0.05, 0, 0, 316)
+Floor1When2Frame.BackgroundColor3 = Color3.fromRGB(16,16,20)
+Floor1When2Frame.BorderSizePixel = 0
+Floor1When2Frame.Parent = SettingsGui
+Instance.new("UICorner", Floor1When2Frame).CornerRadius = UDim.new(0, 8)
+
+local Floor1When2Label = Instance.new("TextLabel")
+Floor1When2Label.Size = UDim2.new(0.65, 0, 1, 0)
+Floor1When2Label.Position = UDim2.new(0, 8, 0, 0)
+Floor1When2Label.BackgroundTransparency = 1
+Floor1When2Label.Text = "Tp Floor 1 when Floor 2"
+Floor1When2Label.Font = Enum.Font.Gotham
+Floor1When2Label.TextSize = 11
+Floor1When2Label.TextColor3 = Color3.fromRGB(220,220,230)
+Floor1When2Label.TextXAlignment = Enum.TextXAlignment.Left
+Floor1When2Label.Parent = Floor1When2Frame
+
+local Floor1When2Btn = Instance.new("TextButton")
+Floor1When2Btn.Size = UDim2.new(0, 60, 0, 20)
+Floor1When2Btn.Position = UDim2.new(1, -70, 0.5, -10)
+Floor1When2Btn.BackgroundColor3 = Color3.fromRGB(35,35,40)
+Floor1When2Btn.BorderSizePixel = 0
+Floor1When2Btn.Text = Config.TpSettings.TpFloor1WhenFloor2 and "ON" or "OFF"
+Floor1When2Btn.Font = Enum.Font.GothamBold
+Floor1When2Btn.TextSize = 10
+Floor1When2Btn.TextColor3 = Config.TpSettings.TpFloor1WhenFloor2 and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+Floor1When2Btn.AutoButtonColor = false
+Floor1When2Btn.Parent = Floor1When2Frame
+Instance.new("UICorner", Floor1When2Btn).CornerRadius = UDim.new(0,6)
+
+Floor1When2Btn.MouseButton1Click:Connect(function()
+    Config.TpSettings.TpFloor1WhenFloor2 = not Config.TpSettings.TpFloor1WhenFloor2
+    Floor1When2Btn.Text = Config.TpSettings.TpFloor1WhenFloor2 and "ON" or "OFF"
+    Floor1When2Btn.TextColor3 = Config.TpSettings.TpFloor1WhenFloor2 and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+    SaveConfig()
+end)
+
 local SoundIdRow = Instance.new("Frame")
 SoundIdRow.Size = UDim2.new(0.9, 0, 0, 30)
-SoundIdRow.Position = UDim2.new(0.05, 0, 0, 320)
+SoundIdRow.Position = UDim2.new(0.05, 0, 0, 350)
 SoundIdRow.BackgroundColor3 = Color3.fromRGB(16,16,20)
 SoundIdRow.BorderSizePixel = 0
 SoundIdRow.Parent = SettingsGui
