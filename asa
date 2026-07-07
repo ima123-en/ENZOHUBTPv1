@@ -569,7 +569,7 @@ local function softStabilizeHumanoid(hum)
     end
 end
 
--- Flug-Loop (Kugelsicher und konstant schnell)
+-- Flug-Loop (Kugelsicher und konstant schnell mit Steigungs-Bremse gegen Anti-Cheat)
 local function velMoveThrough(hrp, waypoints, speedOverride)
     if not hrp or not hrp.Parent or #waypoints == 0 then
         return function() end
@@ -611,14 +611,24 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
         end
         if mag >= 0.1 then
             local dir = diff.Unit
-            local spd = speedOverride or (_G.VanishCarpetSpeed or Config.TpSettings.TpV2Speed or 160)
+            local baseSpeed = speedOverride or (_G.VanishCarpetSpeed or Config.TpSettings.TpV2Speed or 160)
+            local spd = baseSpeed
             
-            -- KONTROLLIERTE LANDUNGS-BREMSE (Verhindert sofortiges Hochschießen am Ziel)
-            if wpIdx == #waypoints and mag < 15 then
-                spd = spd / 2 -- Nur ganz kurz vor dem finalen Ziel um 2x reduzieren
+            -- STEIGUNGS-BREMSE (Verhindert sofortigen Ban bei Aufwärtsbewegung)
+            -- Wenn das Ziel höher liegt als wir, drosseln wir die Geschwindigkeit drastisch!
+            if diff.Y > 2 then 
+                local slope = diff.Y / mag -- Sinus des Steigungswinkels
+                if slope > 0.3 then -- Steiler als ca. 18 Grad nach oben
+                    spd = baseSpeed / 2 -- Halbiert die Geschwindigkeit im Steigflug!
+                end
             end
             
-            -- Garantiert zu jeder Millisekunde absolut lineare und ungedeckelte Bewegung
+            -- KONTROLLIERTE LANDUNGS-BREMSE (Zusätzliche Bremse kurz vor dem Ziel)
+            if wpIdx == #waypoints and mag < 15 then
+                spd = spd / 2
+            end
+            
+            -- Bewegung physikalisch anwenden
             hrp.AssemblyLinearVelocity = dir * spd
             softStabilizeHumanoid(hrp.Parent:FindFirstChildOfClass("Humanoid"))
         end
