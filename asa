@@ -615,9 +615,8 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
             local spd = baseSpeed
             
             -- STEIGUNGS-BREMSE (Verhindert sofortigen Ban bei Aufwärtsbewegung)
-            -- Wenn das Ziel höher liegt als wir, drosseln wir die Geschwindigkeit drastisch!
             if diff.Y > 2 then 
-                local slope = diff.Y / mag -- Sinus des Steigungswinkels
+                local slope = diff.Y / mag
                 if slope > 0.3 then -- Steiler als ca. 18 Grad nach oben
                     spd = baseSpeed / 2 -- Halbiert die Geschwindigkeit im Steigflug!
                 end
@@ -1116,45 +1115,67 @@ local function instantVelocityTpToBrainrot(sel)
     end
 end
 
+-- =============================================================================
+-- GEÄNDERTE HOOK- & ANTI-PULL BYPASS METHODE (SOFORTIGE DEAKTIVIERUNG!)
+-- =============================================================================
 local function fireGrappleOnceMouseFree()
     local char = LP.Character
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
     local hrp  = char and char:FindFirstChild("HumanoidRootPart")
     if not hum or not hrp then return false end
+    
+    local bypassConnection
     local function applyBypass()
+        -- Löscht sofort alle vorhandenen blockierenden Kräfte
         for _, c in ipairs(hrp:GetChildren()) do
             if c.Name == "FlightPower" or c:IsA("BodyVelocity") then
                 c:Destroy()
             end
         end
-        if not hrp:FindFirstChild("_BypassHook") then
-            local tag = Instance.new("BoolValue")
-            tag.Name = "_BypassHook"
-            tag.Parent = hrp
-            hrp.ChildAdded:Connect(function(child)
-                if child.Name == "FlightPower" or child:IsA("BodyVelocity") then
-                    task.wait()
-                    child:Destroy()
-                end
-            end)
-        end
+        
+        -- Listener erstellen, der sofort jede neu hinzugefügte Zugkraft direkt wieder vernichtet
+        bypassConnection = hrp.ChildAdded:Connect(function(child)
+            if child.Name == "FlightPower" or child:IsA("BodyVelocity") then
+                task.wait()
+                child:Destroy()
+            end
+        end)
     end
+    
     applyBypass()
     softStabilizeHumanoid(hum)
+    
     local hook = findToolLocal("Grapple Hook")
-    if not hook then return false end
+    if not hook then 
+        if bypassConnection then bypassConnection:Disconnect() end
+        return false 
+    end
+    
     if hook.Parent ~= char then
         pcall(function() hum:EquipTool(hook) end)
         task.wait(0.02)
     end
+    
+    -- Grapple Hook Aktivierung
     local fakeTargetPos = hrp.Position + Vector3.new(0, -50, 0)
     PlayerMouse.Hit    = { Position = fakeTargetPos }
     PlayerMouse.Target = workspace.Terrain
     local ok = pcall(function() hook:Activate() end)
-    task.delay(0.7, function()
-        local tag = hrp:FindFirstChild("_BypassHook")
-        if tag then tag:Destroy() end
+    
+    -- BEHEBUNG: Der Schutz wird SOFORT nach dem Schuss aufgehoben, nicht erst nach 0.7 Sekunden!
+    task.spawn(function()
+        task.wait(0.05) -- Kurze Sicherheits-Verzögerung für den Roblox-Server
+        if bypassConnection then 
+            bypassConnection:Disconnect() -- Stoppt den Anti-Pull Blocker sofort!
+        end
+        -- Reste aufräumen
+        for _, c in ipairs(hrp:GetChildren()) do
+            if c.Name == "FlightPower" or c:IsA("BodyVelocity") then
+                c:Destroy()
+            end
+        end
     end)
+    
     return ok
 end
 
@@ -1167,7 +1188,7 @@ local function doGrappleHookThenCarpetMove(destPos, facingDir)
     local origChoice = Config.ToolChoice
     if origChoice == "Grapple" then
         fireGrappleOnceMouseFree()
-        task.wait(0.25)
+        task.wait(0.15) -- Kleiner Delay, damit Hook registriert, bevor der Carpet startet
         Config.ToolChoice = "Carpet"
     end
     equipSelectedTpTool()
@@ -1195,16 +1216,33 @@ end
 local isTeleporting = false
 _G.TPStatus = "idle"
 
+-- FIX 1: Sofortiges Zurücksetzen der Sperr-Variable beim Charakter-Tod / Respawn
+LP.CharacterAdded:Connect(function()
+    isTeleporting = false
+    _G.TPStatus = "idle"
+end)
+
 local function doVelocityTP()
     if isTeleporting then return end
     isTeleporting = true
     _G.TPStatus = "start"
+    
+    -- Sicherheits-Thread: Setzt das System nach 8 Sekunden zurück falls etwas schiefläuft
+    local timeoutActive = true
+    task.delay(8, function()
+        if timeoutActive and isTeleporting then
+            isTeleporting = false
+            _G.TPStatus = "timeout_reset"
+        end
+    end)
+
     if not NetModule2 then pcall(loadNet) end
     local char = LP.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum then
         _G.TPStatus = "no_char"
+        timeoutActive = false
         isTeleporting = false
         return
     end
@@ -1214,6 +1252,7 @@ local function doVelocityTP()
     local selData = getPrioritySelected()
     if not selData then
         _G.TPStatus = "no_priority_selection"
+        timeoutActive = false
         isTeleporting = false
         return
     end
@@ -1221,6 +1260,7 @@ local function doVelocityTP()
     local petPos = getBrainrotPosUnified(selData)
     if not petPos then
         _G.TPStatus = "no_pet_position"
+        timeoutActive = false
         isTeleporting = false
         return
     end
@@ -1268,6 +1308,7 @@ local function doVelocityTP()
     local currentPos = hrp.Position
     if (currentPos - destPos).Magnitude > 10 then
         _G.TPStatus = "base_not_reached"
+        timeoutActive = false
         isTeleporting = false
         return
     end
@@ -1279,6 +1320,31 @@ local function doVelocityTP()
     local cloneOk = doCloneUnified()
     if cloneOk then
         task.wait(0.03)
+        
+        -- BEHEBUNG FÜR BODEN-STECKENBLEIBEN:
+        local chr  = LP.Character
+        local cHrp = chr and chr:FindFirstChild("HumanoidRootPart")
+        local cHum = chr and chr:FindFirstChildOfClass("Humanoid")
+        if cHrp then 
+            cHrp.Anchored = false -- Verankerung sofort aufheben!
+            vZeroLocal(cHrp) 
+            
+            -- Charakter um 3 Studs anheben, um freie Luft unter den Füßen zu haben
+            cHrp.CFrame = cHrp.CFrame + Vector3.new(0, 3, 0)
+            vZeroLocal(cHrp)
+
+            -- Sucht und zerstört jegliche verbliebenen Hook-Bypass-Objekte ("Wegzieher")
+            local tag = cHrp:FindFirstChild("_BypassHook")
+            if tag then tag:Destroy() end
+            
+            -- Entfernt aktiv blockierende Velocity-Dämpfer
+            for _, item in ipairs(cHrp:GetChildren()) do
+                if item.Name == "FlightPower" or item:IsA("BodyVelocity") then
+                    item:Destroy()
+                end
+            end
+        end
+        if cHum then softStabilizeHumanoid(cHum) end
         
         _G.TPStatus = "equip_carpet_wait_0.3s"
         local delayConnections = {}
@@ -1303,11 +1369,6 @@ local function doVelocityTP()
             conn:Disconnect()
         end
         
-        local chr  = LP.Character
-        local cHrp = chr and chr:FindFirstChild("HumanoidRootPart")
-        local cHum = chr and chr:FindFirstChildOfClass("Humanoid")
-        if cHrp then vZeroLocal(cHrp) end
-        softStabilizeHumanoid(cHum)
         equipAnyCarpet()
         
         local mode = Config.TpSettings.TpToBrainrotMode or "Velocity"
@@ -1322,6 +1383,7 @@ local function doVelocityTP()
     else
         _G.TPStatus = "clone_failed"
     end
+    timeoutActive = false
     isTeleporting = false
 end
 
