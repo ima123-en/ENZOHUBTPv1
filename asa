@@ -82,7 +82,7 @@ local Config = {
         TpWaitDelay       = 0.3,
         PrioritySoundID   = "94302001673909",
         PrioritySound     = true,
-        TpFloor1WhenFloor2= true, -- Neuer default Wert
+        TpFloor1WhenFloor2= true,
     },
     TpAfterHit    = false,
     AutoTpOnLoad  = false,
@@ -140,6 +140,296 @@ LoadConfig()
 
 _G.VanishCarpetSpeed = Config.TpSettings.TpV2Speed or 160
 
+-- =============================================================================
+-- ENZO'S ULTIMATE 3D PATHFINDER INTEGRATION (PERFORMANCE OPTIMIZED)
+-- =============================================================================
+
+local ObstacleCache = {}
+local lastCacheUpdate = 0
+
+local function updateObstacleCache()
+    local now = tick()
+    if now - lastCacheUpdate < 3 then return end
+    lastCacheUpdate = now
+    
+    table.clear(ObstacleCache)
+    for _, child in ipairs(Workspace:GetChildren()) do
+        local name = child.Name:lower()
+        if child:IsA("Model") or child:IsA("BasePart") then
+            if name:find("fuse") or name:find("shop") or name:find("fusemachine") or
+               name == "tradeplazaportal" or name == "phantomspinwheel" or
+               name == "adminboard" or name == "summer base" or
+               name == "stock" or name == "soccerscoreboard" then
+                
+                local cf, size
+                if child:IsA("Model") then
+                    cf, size = child:GetBoundingBox()
+                else
+                    cf, size = child.CFrame, child.Size
+                end
+                table.insert(ObstacleCache, {cf = cf, size = size})
+            end
+        end
+    end
+end
+
+local function isInsideObstacle(pos, safetyMargin)
+    updateObstacleCache()
+    local margin = safetyMargin or 8
+    
+    for i = 1, #ObstacleCache do
+        local obs = ObstacleCache[i]
+        local localPos = obs.cf:PointToObjectSpace(pos)
+        
+        local halfX = (obs.size.X / 2) + margin
+        local halfY = (obs.size.Y / 2) + 4
+        local halfZ = (obs.size.Z / 2) + margin
+        
+        if math.abs(localPos.X) <= halfX and 
+           math.abs(localPos.Y) <= halfY and 
+           math.abs(localPos.Z) <= halfZ then
+            return true
+        end
+    end
+    return false
+end
+
+local function isPointObstructed(pos)
+    if isInsideObstacle(pos, 8) then
+        return true
+    end
+
+    local checkSize = Vector3.new(4, 4, 4)
+    local overlapParams = OverlapParams.new()
+    overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+    
+    local ignore = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then table.insert(ignore, p.Character) end
+    end
+    overlapParams.FilterDescendantsInstances = ignore
+
+    local parts = Workspace:GetPartBoundsInBox(CFrame.new(pos), checkSize, overlapParams)
+    for i = 1, #parts do
+        local part = parts[i]
+        if part.CanCollide and part.Name ~= "DeliveryHitbox" and part.Name ~= "StealHitbox" then
+            local name = part.Name:lower()
+            if name:find("fuse") or name:find("shop") or name:find("fusemachine") then
+                return true
+            end
+            if part.Size.X * part.Size.Y * part.Size.Z > 2 then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function checkDirectSight(startPos, endPos)
+    local distance = (endPos - startPos).Magnitude
+    local steps = math.max(3, math.floor(distance / 6))
+    
+    for i = 1, steps do
+        local checkPos = startPos:Lerp(endPos, i / steps)
+        if isPointObstructed(checkPos) then
+            return false
+        end
+    end
+
+    local rp = RaycastParams.new()
+    rp.FilterType = Enum.RaycastFilterType.Exclude
+    local ignore = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then table.insert(ignore, p.Character) end
+    end
+    rp.FilterDescendantsInstances = ignore
+    
+    local res = Workspace:Raycast(startPos, endPos - startPos, rp)
+    if res and res.Instance and res.Instance.CanCollide then
+        return false
+    end
+    return true
+end
+
+local function repelPathFromWalls(path)
+    local repelledPath = {}
+    local repelDistance = 10
+
+    local rp = RaycastParams.new()
+    rp.FilterType = Enum.RaycastFilterType.Exclude
+    local ignore = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then table.insert(ignore, p.Character) end
+    end
+    rp.FilterDescendantsInstances = ignore
+
+    local scanDirs = {
+        Vector3.new(1,0,0), Vector3.new(-1,0,0),
+        Vector3.new(0,0,1), Vector3.new(0,0,-1)
+    }
+
+    for idx, pos in ipairs(path) do
+        if idx == 1 or idx == #path then
+            table.insert(repelledPath, pos)
+        else
+            local pushVector = Vector3.zero
+            local activeRepel = false
+
+            for i = 1, #scanDirs do
+                local dir = scanDirs[i]
+                local checkTarget = pos + (dir * repelDistance)
+                local hit = Workspace:Raycast(pos, dir * repelDistance, rp)
+                
+                if (hit and hit.Instance and hit.Instance.CanCollide) or isInsideObstacle(checkTarget, 2) then
+                    local dist = hit and hit.Distance or repelDistance
+                    local weight = (repelDistance - dist) / repelDistance
+                    pushVector = pushVector - dir * weight
+                    activeRepel = true
+                end
+            end
+
+            if activeRepel and pushVector.Magnitude > 0 then
+                local finalPos = pos + (pushVector.Unit * 8)
+                if not isPointObstructed(finalPos) then
+                    table.insert(repelledPath, finalPos)
+                else
+                    table.insert(repelledPath, pos)
+                end
+            else
+                table.insert(repelledPath, pos)
+            end
+        end
+    end
+
+    return repelledPath
+end
+
+local function find3DPathAroundWalls(startPos, targetPos)
+    local path = {}
+    local maxNodes = 250
+    local nodeDistance = 12
+    
+    local openSet = {}
+    local closedSet = {}
+    
+    table.insert(openSet, {
+        pos = startPos,
+        parent = nil,
+        g = 0,
+        f = (startPos - targetPos).Magnitude
+    })
+    
+    local directions = {}
+    for x = -1, 1 do
+        for y = -0.3, 0.3, 0.3 do
+            for z = -1, 1 do
+                if not (x == 0 and y == 0 and z == 0) then
+                    table.insert(directions, Vector3.new(x, y, z).Unit)
+                end
+            end
+        end
+    end
+    
+    local foundNode = nil
+    
+    while #openSet > 0 and maxNodes > 0 do
+        maxNodes = maxNodes - 1
+        
+        local currentIdx = 1
+        local current = openSet[1]
+        for i, node in ipairs(openSet) do
+            if node.f < current.f then
+                current = node
+                currentIdx = i
+            end
+        end
+        
+        if (current.pos - targetPos).Magnitude < nodeDistance or checkDirectSight(current.pos, targetPos) then
+            foundNode = current
+            break
+        end
+        
+        table.remove(openSet, currentIdx)
+        table.insert(closedSet, current.pos)
+        
+        for i = 1, #directions do
+            local dir = directions[i]
+            local neighborPos = current.pos + (dir * nodeDistance)
+            
+            if not isPointObstructed(neighborPos) then
+                local alreadyScanned = false
+                for j = 1, #closedSet do
+                    if (closedSet[j] - neighborPos).Magnitude < 5 then
+                        alreadyScanned = true
+                        break
+                    end
+                end
+                
+                if not alreadyScanned then
+                    local gScore = current.g + nodeDistance
+                    local hScore = (neighborPos - targetPos).Magnitude
+                    local fScore = gScore + hScore
+                    
+                    local inOpen = false
+                    for j = 1, #openSet do
+                        local openNode = openSet[j]
+                        if (openNode.pos - neighborPos).Magnitude < 5 then
+                            inOpen = true
+                            if gScore < openNode.g then
+                                openNode.g = gScore
+                                openNode.f = fScore
+                                openNode.parent = current
+                            end
+                            break
+                        end
+                    end
+                    
+                    if not inOpen then
+                        table.insert(openSet, {
+                            pos = neighborPos,
+                            parent = current,
+                            g = gScore,
+                            f = fScore
+                        })
+                    end
+                end
+            end
+        end
+    end
+    
+    if foundNode then
+        local curr = foundNode
+        table.insert(path, 1, targetPos)
+        while curr do
+            table.insert(path, 1, curr.pos)
+            curr = curr.parent
+        end
+    else
+        table.insert(path, startPos)
+        table.insert(path, targetPos)
+    end
+    
+    local repelled = repelPathFromWalls(path)
+
+    local smoothedPath = { repelled[1] }
+    local i = 1
+    while i < #repelled do
+        local nextVisible = i + 1
+        for j = #repelled, i + 2, -1 do
+            if checkDirectSight(smoothedPath[#smoothedPath], repelled[j]) then
+                nextVisible = j
+                break
+            end
+        end
+        table.insert(smoothedPath, repelled[nextVisible])
+        i = nextVisible
+    end
+    
+    return smoothedPath
+end
+
+-- =============================================================================
+-- SYSTEM METHODEN & LOGIKEN
 local function getPrioritySelected()
     local PS = getgenv().PrioritySystem
     if PS and PS.SelectedData then
@@ -258,120 +548,6 @@ local function vZeroLocal(hrp)
     end
 end
 
-local STRUCT = { ["structure base home"] = true, ["Wall"] = true, ["Floor"] = true, ["Roof"] = true }
-local SKIP_NAME = {
-    ["DeliveryHitbox"]=true, ["StealHitbox"]=true, ["LaserHitbox"]=true,
-    ["AnimalTarget"]=true, ["Multiplier"]=true,  ["Laser"]=true, ["Hitbox"]=true,
-    ["Spawn"]=true, ["MainRoot"]=true, ["SecondFloor"]=true, ["ThirdFloor"]=true, ["Slope"]=true
-}
-
-local function blocks(inst)
-    if not inst then return false end
-    if SKIP_NAME[inst.Name] then return false end
-    if inst.CanCollide then return true end
-    if STRUCT[inst.Name] then return true end
-    local s = inst.Size
-    if s and math.max(s.X * s.Y, s.X * s.Z, s.Y * s.Z) > 150 then return true end
-    return false
-end
-
-local function blockRay(origin, target)
-    local rp = RaycastParams.new()
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    rp.IgnoreWater = true
-    local skip = {}
-    for _, pl in ipairs(Players:GetPlayers()) do
-        if pl.Character then skip[#skip + 1] = pl.Character end
-    end
-    local o = origin
-    for _ = 1, 16 do
-        rp.FilterDescendantsInstances = skip
-        local d = target - o
-        if d.Magnitude < 0.05 then return nil end
-        local res = Workspace:Raycast(o, d, rp)
-        if not res then return nil end
-        if blocks(res.Instance) then return res end
-        skip[#skip + 1] = res.Instance
-        o = res.Position + d.Unit * 0.3
-    end
-    return nil
-end
-
-local function clearLine(a, b) return blockRay(a, b) == nil end
-
-local CLEARANCE = 6
-local function clearWide(a, b)
-    if not clearLine(a, b) then return false end
-    local d = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
-    if d.Magnitude < 0.1 then return true end
-    local p = Vector3.new(-d.Z, 0, d.X).Unit * CLEARANCE
-    return clearLine(a + p, b + p) and clearLine(a - p, b - p)
-end
-
-local function computeRoute(fromPos, toPos, facingDir)
-    if clearLine(fromPos, toPos) then
-        return { toPos }
-    end
-    local entry = facingDir and (toPos - facingDir * 14) or toPos
-    local groundFrom = Vector3.new(fromPos.X, fromPos.Y, fromPos.Z)
-    local groundTo   = Vector3.new(entry.X, fromPos.Y, entry.Z)
-    local path = PathfindingService:CreatePath({
-        AgentRadius      = 6,
-        AgentHeight      = 6,
-        AgentCanJump     = true,
-        AgentJumpHeight  = 12,
-        AgentMaxSlope    = 45,
-        Costs            = { Water = 100 },
-    })
-    local ok = pcall(function()
-        path:ComputeAsync(groundFrom, groundTo)
-    end)
-    if not ok or path.Status ~= Enum.PathStatus.Success then
-        return { entry + Vector3.new(0, 3, 0), toPos }
-    end
-    local waypoints = path:GetWaypoints()
-    if #waypoints == 0 then
-        return { entry + Vector3.new(0, 3, 0), toPos }
-    end
-    local FLOAT = 3
-    local raw = {}
-    table.insert(raw, fromPos + Vector3.new(0, FLOAT, 0))
-    local lastAdded = waypoints[1].Position
-    table.insert(raw, lastAdded + Vector3.new(0, FLOAT, 0))
-    for i = 2, #waypoints do
-        local pos = waypoints[i].Position
-        if (pos - lastAdded).Magnitude >= 6 then
-            table.insert(raw, pos + Vector3.new(0, FLOAT, 0))
-            lastAdded = pos
-        end
-    end
-    table.insert(raw, entry + Vector3.new(0, FLOAT, 0))
-    table.insert(raw, toPos)
-    if #raw <= 2 then
-        return raw
-    end
-    local simplified = { raw[1] }
-    local currentIndex = 1
-    while currentIndex < #raw do
-        local bestIndex = currentIndex + 1
-        for i = #raw, currentIndex + 1, -1 do
-            local a = simplified[#simplified]
-            local b = raw[i]
-            if clearWide(a, b) then
-                bestIndex = i
-                break
-            end
-        end
-        table.insert(simplified, raw[bestIndex])
-        currentIndex = bestIndex
-    end
-    for i = 1, #simplified do
-        local p = simplified[i]
-        simplified[i] = Vector3.new(p.X, p.Y, p.Z)
-    end
-    return simplified
-end
-
 local function softStabilizeHumanoid(hum)
     if not hum then return end
     if hum.Health <= 0 then return end
@@ -393,6 +569,7 @@ local function softStabilizeHumanoid(hum)
     end
 end
 
+-- Flug-Loop (Kugelsicher und konstant schnell)
 local function velMoveThrough(hrp, waypoints, speedOverride)
     if not hrp or not hrp.Parent or #waypoints == 0 then
         return function() end
@@ -400,7 +577,10 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
     local wpIdx = 1
     local done = false
     local conn
-    local ARRIVE = 3
+    local ARRIVE = 4
+    
+    equipSelectedTpTool()
+    
     local function hardStop()
         if done then return end
         done = true
@@ -414,7 +594,6 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
             hardStop()
             return
         end
-        equipSelectedTpTool()
         local target = waypoints[wpIdx]
         local diff = target - hrp.Position
         local mag = diff.Magnitude
@@ -427,10 +606,19 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
             target = waypoints[wpIdx]
             diff = target - hrp.Position
             mag = diff.Magnitude
+            
+            equipSelectedTpTool()
         end
         if mag >= 0.1 then
             local dir = diff.Unit
             local spd = speedOverride or (_G.VanishCarpetSpeed or Config.TpSettings.TpV2Speed or 160)
+            
+            -- KONTROLLIERTE LANDUNGS-BREMSE (Verhindert sofortiges Hochschießen am Ziel)
+            if wpIdx == #waypoints and mag < 15 then
+                spd = spd / 2 -- Nur ganz kurz vor dem finalen Ziel um 2x reduzieren
+            end
+            
+            -- Garantiert zu jeder Millisekunde absolut lineare und ungedeckelte Bewegung
             hrp.AssemblyLinearVelocity = dir * spd
             softStabilizeHumanoid(hrp.Parent:FindFirstChildOfClass("Humanoid"))
         end
@@ -440,17 +628,29 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
     end
 end
 
+-- GEGEN ANTI-CHEAT OPTIMIERTE FIXIERUNG (KEIN HARTER CFRAME-SPAM MEHR!)
 local function sxeFixatePosition(hrp, destPos, facingDir)
     if not hrp or not hrp.Parent then return end
     
+    -- Physikalische Kräfte entladen, um plötzliche Flug-Spikes nach dem Freigeben zu verhindern
     vZeroLocal(hrp)
+    
+    -- Einmalig die exakte Ziel-Ausrichtung per CFrame vorgeben
     hrp.CFrame = CFrame.new(destPos, destPos + facingDir)
     
+    -- Charakter sofort physikalisch verankern, damit Roblox keine Energie im Hintergrund aufstauen kann
+    hrp.Anchored = true
+    
+    -- Extrem kurze Haltephase über 10 Frames, um jegliche Bewegung restlos verpuffen zu lassen
     local syncFrames = 10
     local syncConn
     syncConn = RunService.Heartbeat:Connect(function()
         if not hrp or not hrp.Parent or syncFrames <= 0 then 
             if syncConn then syncConn:Disconnect() end
+            if hrp and hrp.Parent then
+                hrp.Anchored = false -- Sicher und ruckelfrei wieder entankern
+                vZeroLocal(hrp)
+            end
             return 
         end
         syncFrames = syncFrames - 1
@@ -546,7 +746,6 @@ local function updateFloorPlatforms()
 
     -- Update Etage 2 Plattform (Nur wenn in den Settings aktiviert!)
     if isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2 then
-        -- Exakt 11 Studs tiefer platziert
         local targetY = brainPos.Y - 11
         SecondFloorPlatform.Position = Vector3.new(brainPos.X, targetY, brainPos.Z)
         SecondFloorPlatform.CanCollide = true
@@ -853,7 +1052,6 @@ local function instantVelocityTpToBrainrot(sel)
             ThirdFloorPlatform.Position.Z
         )
     elseif isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2 and SecondFloorPlatform and SecondFloorPlatform.Parent then
-        -- Landung exakt auf der generierten Plattform unter Etage 2
         targetPos = Vector3.new(
             SecondFloorPlatform.Position.X,
             (brainPos.Y - 11) + 1.5,
@@ -965,7 +1163,8 @@ local function doGrappleHookThenCarpetMove(destPos, facingDir)
     equipSelectedTpTool()
     _G.VanishCarpetSpeed = Config.TpSettings.TpGrappleSpeed or 260
     vZeroLocal(hrp)
-    local route = computeRoute(hrp.Position, destPos, facingDir)
+    
+    local route = find3DPathAroundWalls(hrp.Position, destPos)
     local stopMove = velMoveThrough(hrp, route, Config.TpSettings.TpGrappleSpeed or 260)
     local t0 = tick()
     local timeout = 8
@@ -1020,7 +1219,6 @@ local function doVelocityTP()
 
     local baseIdx   = getBaseIdxByPetPos(petPos)
     
-    -- Wenn "Tp Floor 1 when Floor 2" aktiv ist, weichen wir bei Etage 2 auf die untere Basis (LOW) aus!
     local isUpper   = petPos.Y > 7
     if isSecondFloor(petPos) and Config.TpSettings.TpFloor1WhenFloor2 then
         isUpper = false
@@ -1039,7 +1237,8 @@ local function doVelocityTP()
         vZeroLocal(hrp)
         softStabilizeHumanoid(hum)
         local speedOverride = _G.VanishCarpetSpeed
-        local route = computeRoute(hrp.Position, destPos, facingDir)
+        
+        local route = find3DPathAroundWalls(hrp.Position, destPos)
         local stopMove = velMoveThrough(hrp, route, speedOverride)
         local t0 = tick()
         local timeout = 8
@@ -1117,6 +1316,10 @@ local function doVelocityTP()
 end
 
 _G.VanishStartSideTP = doVelocityTP
+
+-- =============================================================================
+-- GUI ERSTELLUNG & EVENT BINDINGS
+-- =============================================================================
 
 local oldGui = PlayerGui:FindFirstChild("ENZO_TP_PANEL")
 if oldGui then oldGui:Destroy() end
@@ -1340,6 +1543,7 @@ Instance.new("UICorner", TpKeyBg).CornerRadius = UDim.new(0, 6)
 
 local TpKeyButton = Instance.new("TextButton")
 TpKeyButton.Size = UDim2.new(1, 0, 1, 0)
+MiddleKeyButton = TpKeyButton
 TpKeyButton.BackgroundTransparency = 1
 TpKeyButton.Font = Enum.Font.GothamBold
 TpKeyButton.TextSize = 11
@@ -1519,11 +1723,10 @@ task.defer(function()
     setGuiAlpha(alpha, true)
 end)
 
--- SETTINGS MENU (Leicht vergrößert für den neuen Button)
 local SettingsGui = Instance.new("Frame")
 SettingsGui.Name = "SettingsGui"
 SettingsGui.AnchorPoint = Vector2.new(0.5, 0.5)
-SettingsGui.Size = UDim2.new(0, 280, 0, 395) -- Höhe von 360 auf 395 vergrößert
+SettingsGui.Size = UDim2.new(0, 280, 0, 395)
 SettingsGui.Position = UDim2.new(0.5, 0, 0.5, 0)
 SettingsGui.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 SettingsGui.BorderSizePixel = 0
@@ -1796,7 +1999,7 @@ PrioritySoundLabel.Parent = PrioritySoundFrame
 local PrioritySoundBtn = Instance.new("TextButton")
 PrioritySoundBtn.Size = UDim2.new(0, 60, 0, 20)
 PrioritySoundBtn.Position = UDim2.new(1, -70, 0.5, -10)
-PrioritySoundBtn.BackgroundColor3 = Color3.fromRGB(35,35,40)
+PrioritySoundBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 PrioritySoundBtn.BorderSizePixel = 0
 PrioritySoundBtn.Text = Config.TpSettings.PrioritySound and "ON" or "OFF"
 PrioritySoundBtn.Font = Enum.Font.GothamBold
@@ -1813,7 +2016,6 @@ PrioritySoundBtn.MouseButton1Click:Connect(function()
     SaveConfig()
 end)
 
--- NEUE EINSTELLUNG: "Tp Floor 1 when Floor 2" BUTTON
 local Floor1When2Frame = Instance.new("Frame")
 Floor1When2Frame.Size = UDim2.new(0.9, 0, 0, 30)
 Floor1When2Frame.Position = UDim2.new(0.05, 0, 0, 316)
