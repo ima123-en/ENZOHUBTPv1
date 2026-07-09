@@ -141,6 +141,16 @@ LoadConfig()
 _G.VanishCarpetSpeed = Config.TpSettings.TpV2Speed or 160
 
 -- =============================================================================
+-- SYSTEM STATUS & DEATH CHECK CORES
+-- =============================================================================
+local function isAlive()
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    return char and hum and hrp and hum.Health > 0 and hrp.Parent == char
+end
+
+-- =============================================================================
 -- ENZO'S ULTIMATE 3D PATHFINDER INTEGRATION (PERFORMANCE OPTIMIZED)
 -- =============================================================================
 
@@ -569,7 +579,7 @@ local function softStabilizeHumanoid(hum)
     end
 end
 
--- Flug-Loop (Kugelsicher und konstant schnell mit Steigungs-Bremse gegen Anti-Cheat)
+-- Flug-Loop (Kugelsicher und konstant schnell mit Steigungs-Bremse und Lagback-Detection)
 local function velMoveThrough(hrp, waypoints, speedOverride)
     if not hrp or not hrp.Parent or #waypoints == 0 then
         return function() end
@@ -581,6 +591,9 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
     
     equipSelectedTpTool()
     
+    local achievedMinDist = math.huge
+    local lastWpIdx = 1
+
     local function hardStop()
         if done then return end
         done = true
@@ -589,14 +602,33 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
             vZeroLocal(hrp)
         end
     end
-    conn = RunService.Heartbeat:Connect(function()
-        if not hrp or not hrp.Parent or done then
+
+    conn = RunService.Heartbeat:Connect(function(dt)
+        if not isAlive() then
+            _G.TPStatus = "player_died_aborted"
             hardStop()
             return
         end
+
+        -- Zurücksetzen der Mindestdistanz, wenn sich der Wegpunkt ändert
+        if wpIdx ~= lastWpIdx then
+            achievedMinDist = math.huge
+            lastWpIdx = wpIdx
+        end
+
         local target = waypoints[wpIdx]
         local diff = target - hrp.Position
         local mag = diff.Magnitude
+
+        -- Lagback / Rubberband Detection
+        if mag < achievedMinDist then
+            achievedMinDist = mag
+        elseif mag > achievedMinDist + 30 then -- Zurückgezogen um 30+ Studs
+            _G.TPStatus = "lagback_detected_aborted"
+            hardStop()
+            return
+        end
+
         if mag < ARRIVE then
             wpIdx = wpIdx + 1
             if wpIdx > #waypoints then
@@ -893,15 +925,21 @@ local function finalSnap(hrp, targetPos)
 end
 
 local function velWalkTo(hrp, targetPos, walkSpeed)
-    if not hrp or not hrp.Parent then return end
+    if not isAlive() then return end
     local char = hrp.Parent
-    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    local hum  = char:FindFirstChildOfClass("Humanoid")
     local EPS = 0.5
     local maxDuration  = 10
     local startTime    = tick()
     local conn
+    local achievedMin = math.huge
     conn = RunService.Heartbeat:Connect(function()
-        if not hrp or not hrp.Parent then
+        if not isAlive() then
+            _G.TPStatus = "player_died_aborted"
+            if conn then conn:Disconnect() end
+            return
+        end
+        if _G.TPStatus == "lagback_detected_aborted" then
             if conn then conn:Disconnect() end
             return
         end
@@ -909,6 +947,15 @@ local function velWalkTo(hrp, targetPos, walkSpeed)
         local goal  = Vector3.new(targetPos.X, pos.Y, targetPos.Z)
         local diff  = goal - pos
         local dist  = diff.Magnitude
+        
+        if dist < achievedMin then
+            achievedMin = dist
+        elseif dist > achievedMin + 30 then
+            _G.TPStatus = "lagback_detected_aborted"
+            if conn then conn:Disconnect() end
+            return
+        end
+
         if dist < EPS or tick() - startTime > maxDuration then
             if conn then conn:Disconnect() end
             finalSnap(hrp, targetPos)
@@ -936,6 +983,7 @@ local function quickDoubleTpToBrainrot(sel)
     local brainPos = getBrainrotPosUnified(sel)
     if not brainPos then return end
     for _ = 1, 2 do
+        if not isAlive() then return end
         local char = LP.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         local hum  = char and char:FindFirstChildOfClass("Humanoid")
@@ -957,9 +1005,11 @@ local function AfterClone_ThirdFloorAware(savedSel)
     if not sel then return end
     local brainPos = getBrainrotPosUnified(sel)
     if not brainPos then return end
+    
+    if not isAlive() then return end
     local char = LP.Character
-    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    local hrp  = char:FindFirstChild("HumanoidRootPart")
+    local hum  = char:FindFirstChildOfClass("Humanoid")
     if not hrp then return end
     equipAnyCarpet()
     vZeroLocal(hrp)
@@ -972,13 +1022,26 @@ local function AfterClone_ThirdFloorAware(savedSel)
         local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
         local done = false
         local conn
+        local achievedMin = math.huge
+
         conn = RunService.Heartbeat:Connect(function()
-            if not hrp or not hrp.Parent then
+            if not isAlive() then
+                _G.TPStatus = "player_died_aborted"
+                done = true
                 if conn then conn:Disconnect() end
                 return
             end
             local diff = target - hrp.Position
             local dist = diff.Magnitude
+            if dist < achievedMin then
+                achievedMin = dist
+            elseif dist > achievedMin + 30 then
+                _G.TPStatus = "lagback_detected_aborted"
+                done = true
+                if conn then conn:Disconnect() end
+                return
+            end
+
             if dist < 0.8 then
                 done = true
                 vZeroLocal(hrp)
@@ -1005,13 +1068,26 @@ local function AfterClone_ThirdFloorAware(savedSel)
         local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
         local done = false
         local conn
+        local achievedMin = math.huge
+
         conn = RunService.Heartbeat:Connect(function()
-            if not hrp or not hrp.Parent then
+            if not isAlive() then
+                _G.TPStatus = "player_died_aborted"
+                done = true
                 if conn then conn:Disconnect() end
                 return
             end
             local diff = target - hrp.Position
             local dist = diff.Magnitude
+            if dist < achievedMin then
+                achievedMin = dist
+            elseif dist > achievedMin + 30 then
+                _G.TPStatus = "lagback_detected_aborted"
+                done = true
+                if conn then conn:Disconnect() end
+                return
+            end
+
             if dist < 0.8 then
                 done = true
                 vZeroLocal(hrp)
@@ -1032,13 +1108,52 @@ local function AfterClone_ThirdFloorAware(savedSel)
         return
     end
 
+    -- Standard Walk mit Lagback-Erkennung
     local targetPos = getFrontOfBrainrot(hrp, brainPos)
     local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
-    velWalkTo(hrp, targetPos, walkSpeed)
+    
+    local achievedMin = math.huge
+    local done = false
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if not isAlive() then
+            _G.TPStatus = "player_died_aborted"
+            done = true
+            if conn then conn:Disconnect() end
+            return
+        end
+        local pos = hrp.Position
+        local goal = Vector3.new(targetPos.X, pos.Y, targetPos.Z)
+        local diff = goal - pos
+        local dist = diff.Magnitude
+        if dist < achievedMin then
+            achievedMin = dist
+        elseif dist > achievedMin + 30 then
+            _G.TPStatus = "lagback_detected_aborted"
+            done = true
+            if conn then conn:Disconnect() end
+            return
+        end
+
+        if dist < 0.5 then
+            done = true
+            if conn then conn:Disconnect() end
+            finalSnap(hrp, targetPos)
+            return
+        end
+        local dir = diff.Unit
+        hrp.AssemblyLinearVelocity = Vector3.new(dir.X, 0, dir.Z) * walkSpeed
+        softStabilizeHumanoid(hum)
+    end)
+    local t0 = tick()
+    while not done and tick() - t0 < 10 do
+        task.wait(0.05)
+    end
+    if conn then conn:Disconnect() end
 end
 
 -- =============================================================================
--- OPTIMIERTE VELOCITY TELEPORTATION (2-FACH TELEPORT MIT 0.2 SEKUNDEN ABSTAND)
+-- OPTIMIERTE VELOCITY TELEPORTATION (2-FACH TELEPORT MIT UNTERBRECHUNGS-DETECTION)
 -- =============================================================================
 local function instantVelocityTpToBrainrot(sel)
     if not sel then return end
@@ -1067,7 +1182,7 @@ local function instantVelocityTpToBrainrot(sel)
 
     local freezePosition = targetPos + Vector3.new(0, 1.5, 0)
 
-    -- Führt exakt 2 Phasen-Teleports im Abstand von 0.2s aus (Kugelsichere Stabilisierung)
+    -- Führt exakt 2 Phasen-Teleports aus
     for phase = 1, 2 do
         local char = LP.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
@@ -1109,13 +1224,24 @@ local function instantVelocityTpToBrainrot(sel)
             hum:ChangeState(Enum.HumanoidStateType.Running)
         end
 
-        -- Wartet exakt 0.2 Sekunden zwischen den Teleports
+        -- Server Rollback Check nach unanchor
+        if isAlive() then
+            local actualDist = (hrp.Position - freezePosition).Magnitude
+            if actualDist > 35 then -- Server verweigert die Positionierung
+                _G.TPStatus = "lagback_detected_aborted"
+                return
+            end
+        else
+            _G.TPStatus = "player_died_aborted"
+            return
+        end
+
+        -- Wartet exakt 0.2 Sekunden zwischen den Phasen
         if phase < 2 then
             task.wait(0.2)
         end
     end
 
-    -- Abschließender State-Reset
     task.spawn(function()
         task.wait(0.3)
         local char = LP.Character
@@ -1139,14 +1265,12 @@ local function fireGrappleOnceMouseFree()
     
     local bypassConnection
     local function applyBypass()
-        -- Löscht sofort alle vorhandenen blockierenden Kräfte
         for _, c in ipairs(hrp:GetChildren()) do
             if c.Name == "FlightPower" or c:IsA("BodyVelocity") then
                 c:Destroy()
             end
         end
         
-        -- Listener erstellen, der sofort jede neu hinzugefügte Zugkraft direkt wieder vernichtet
         bypassConnection = hrp.ChildAdded:Connect(function(child)
             if child.Name == "FlightPower" or child:IsA("BodyVelocity") then
                 task.wait()
@@ -1169,19 +1293,17 @@ local function fireGrappleOnceMouseFree()
         task.wait(0.02)
     end
     
-    -- Grapple Hook Aktivierung
     local fakeTargetPos = hrp.Position + Vector3.new(0, -50, 0)
     PlayerMouse.Hit    = { Position = fakeTargetPos }
     PlayerMouse.Target = workspace.Terrain
     local ok = pcall(function() hook:Activate() end)
     
-    -- BEHEBUNG: Der Schutz wird SOFORT nach dem Schuss aufgehoben, nicht erst nach 0.7 Sekunden!
+    -- Deaktiviert den Bypass SOFORT nach Schuss-Ausführung
     task.spawn(function()
-        task.wait(0.05) -- Kurze Sicherheits-Verzögerung für den Roblox-Server
+        task.wait(0.05)
         if bypassConnection then 
-            bypassConnection:Disconnect() -- Stoppt den Anti-Pull Blocker sofort!
+            bypassConnection:Disconnect()
         end
-        -- Reste aufräumen
         for _, c in ipairs(hrp:GetChildren()) do
             if c.Name == "FlightPower" or c:IsA("BodyVelocity") then
                 c:Destroy()
@@ -1201,7 +1323,7 @@ local function doGrappleHookThenCarpetMove(destPos, facingDir)
     local origChoice = Config.ToolChoice
     if origChoice == "Grapple" then
         fireGrappleOnceMouseFree()
-        task.wait(0.15) -- Kleiner Delay, damit Hook registriert, bevor der Carpet startet
+        task.wait(0.15)
         Config.ToolChoice = "Carpet"
     end
     equipSelectedTpTool()
@@ -1213,7 +1335,13 @@ local function doGrappleHookThenCarpetMove(destPos, facingDir)
     local t0 = tick()
     local timeout = 8
     while tick() - t0 < timeout do
-        if not hrp or not hrp.Parent then break end
+        if not isAlive() then 
+            _G.TPStatus = "player_died_aborted"
+            break 
+        end
+        if _G.TPStatus == "lagback_detected_aborted" then 
+            break 
+        end
         if (hrp.Position - destPos).Magnitude < 4 then
             break
         end
@@ -1233,6 +1361,20 @@ local function doVelocityTP()
     if isTeleporting then return end
     isTeleporting = true
     _G.TPStatus = "start"
+
+    local function checkAbort()
+        if not isAlive() then
+            _G.TPStatus = "player_died_aborted"
+            return true
+        end
+        if _G.TPStatus == "lagback_detected_aborted" then
+            return true
+        end
+        return false
+    end
+
+    if checkAbort() then isTeleporting = false; return end
+
     if not NetModule2 then pcall(loadNet) end
     local char = LP.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -1262,7 +1404,6 @@ local function doVelocityTP()
     playPrioritySound()
 
     local baseIdx   = getBaseIdxByPetPos(petPos)
-    
     local isUpper   = petPos.Y > 7
     if isSecondFloor(petPos) and Config.TpSettings.TpFloor1WhenFloor2 then
         isUpper = false
@@ -1271,6 +1412,9 @@ local function doVelocityTP()
     local bestEntry = getBestBasePointInBase(baseIdx, isUpper, hrp.Position.Z)
     local destPos   = bestEntry.pos
     local facingDir = bestEntry.look
+
+    if checkAbort() then isTeleporting = false; return end
+
     if (Config.ToolChoice or "Grapple") == "Grapple" then
         doGrappleHookThenCarpetMove(destPos, facingDir)
     else
@@ -1287,7 +1431,7 @@ local function doVelocityTP()
         local t0 = tick()
         local timeout = 8
         while tick() - t0 < timeout do
-            if not hrp or not hrp.Parent then break end
+            if checkAbort() then break end
             if (hrp.Position - destPos).Magnitude < 4 then
                 break
             end
@@ -1297,8 +1441,14 @@ local function doVelocityTP()
         stopMove()
         vZeroLocal(hrp)
     end
+
+    if checkAbort() then isTeleporting = false; return end
+
     _G.TPStatus = "at_base_before_clone"
     sxeFixatePosition(hrp, destPos, facingDir)
+
+    if checkAbort() then isTeleporting = false; return end
+
     local currentPos = hrp.Position
     if (currentPos - destPos).Magnitude > 10 then
         _G.TPStatus = "base_not_reached"
@@ -1308,9 +1458,16 @@ local function doVelocityTP()
     
     local cd = Config.TpSettings.CloneDelay or 0.03
     cd = math.clamp(cd, 0.01, 1)
-    task.wait(cd)
+
+    local waitStart = tick()
+    while tick() - waitStart < cd do
+        if checkAbort() then isTeleporting = false; return end
+        task.wait(0.01)
+    end
     
     local cloneOk = doCloneUnified()
+    if checkAbort() then isTeleporting = false; return end
+
     if cloneOk then
         task.wait(0.03)
         
@@ -1331,12 +1488,22 @@ local function doVelocityTP()
         end
         table.insert(delayConnections, RunService.Heartbeat:Connect(holdStillAndKeepCarpet))
         
-        task.wait(0.3)
+        local waitStart2 = tick()
+        while tick() - waitStart2 < 0.3 do
+            if checkAbort() then 
+                for _, conn in ipairs(delayConnections) do conn:Disconnect() end
+                isTeleporting = false; 
+                return 
+            end
+            task.wait(0.01)
+        end
         
         for _, conn in ipairs(delayConnections) do
             conn:Disconnect()
         end
         
+        if checkAbort() then isTeleporting = false; return end
+
         local chr  = LP.Character
         local cHrp = chr and chr:FindFirstChild("HumanoidRootPart")
         local cHum = chr and chr:FindFirstChildOfClass("Humanoid")
@@ -1356,7 +1523,10 @@ local function doVelocityTP()
         else
             AfterClone_ThirdFloorAware(savedSel)
         end
-        _G.TPStatus = "done"
+
+        if _G.TPStatus ~= "lagback_detected_aborted" and _G.TPStatus ~= "player_died_aborted" then
+            _G.TPStatus = "done"
+        end
     else
         _G.TPStatus = "clone_failed"
     end
