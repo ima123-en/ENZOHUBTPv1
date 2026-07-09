@@ -151,49 +151,92 @@ local function isAlive()
 end
 
 -- =============================================================================
--- ENZO'S ULTIMATE 3D PATHFINDER INTEGRATION (PERFORMANCE OPTIMIZED)
+-- ENZO'S HIGH-ALTITUDE 3D OBSTACLE BYPASS ENGINE (V6 - PERFECT FLY-OVER)
 -- =============================================================================
+
+local TARGET_OBSTACLES = {
+    "fusemachine",
+    "shop",
+    "stock",
+    "soccerscoreboard",
+    "adminboard",
+    "robuxshop",
+    "phantomspinwheel",
+    "tradeplazaportal",
+    "summer fuse",
+    "summerfuse"
+}
 
 local ObstacleCache = {}
 local lastCacheUpdate = 0
 
-local function updateObstacleCache()
+local function updateObstacleCache(force)
     local now = tick()
-    if now - lastCacheUpdate < 3 then return end
+    if not force and (now - lastCacheUpdate < 2) then return end
     lastCacheUpdate = now
     
     table.clear(ObstacleCache)
-    for _, child in ipairs(Workspace:GetChildren()) do
+    
+    local descendants = Workspace:GetDescendants()
+    for i = 1, #descendants do
+        local child = descendants[i]
         local name = child.Name:lower()
-        if child:IsA("Model") or child:IsA("BasePart") then
-            if name:find("fuse") or name:find("shop") or name:find("fusemachine") or
-               name == "tradeplazaportal" or name == "phantomspinwheel" or
-               name == "adminboard" or name == "summer base" or
-               name == "stock" or name == "soccerscoreboard" then
-                
-                local cf, size
-                if child:IsA("Model") then
-                    cf, size = child:GetBoundingBox()
-                else
-                    cf, size = child.CFrame, child.Size
+        
+        local isTarget = false
+        for _, targetName in ipairs(TARGET_OBSTACLES) do
+            if name:find(targetName, 1, true) then
+                isTarget = true
+                break
+            end
+        end
+        
+        if isTarget then
+            if child:IsA("Model") then
+                local cf, size = child:GetBoundingBox()
+                if size.Magnitude > 2 then
+                    table.insert(ObstacleCache, {
+                        cf = cf,
+                        size = size,
+                        name = child.Name
+                    })
                 end
-                table.insert(ObstacleCache, {cf = cf, size = size})
+            elseif child:IsA("BasePart") and child.CanCollide then
+                table.insert(ObstacleCache, {
+                    cf = child.CFrame,
+                    size = child.Size,
+                    name = child.Name
+                })
             end
         end
     end
 end
 
-local function isInsideObstacle(pos, safetyMargin)
-    updateObstacleCache()
-    local margin = safetyMargin or 8
+local function getDynamicMargins(pos, startPos, targetPos)
+    local distToStart = (pos - startPos).Magnitude
+    local distToTarget = (pos - targetPos).Magnitude
+    local minDist = math.min(distToStart, distToTarget)
     
+    local baseMarginH = 10 -- Gewaltiger horizontaler Abstand (Zwingt zum Drüberfliegen!)
+    local baseMarginV = 3  -- Niedriger vertikaler Abstand (Erlaubt knappes Überfliegen)
+    
+    if minDist < 15 then
+        local factor = minDist / 15
+        local marginH = 1.5 + (baseMarginH - 1.5) * factor
+        local marginV = 1.0 + (baseMarginV - 1.0) * factor
+        return marginH, marginV
+    end
+    
+    return baseMarginH, baseMarginV
+end
+
+local function isInsideObstacle(pos, marginH, marginV)
     for i = 1, #ObstacleCache do
         local obs = ObstacleCache[i]
         local localPos = obs.cf:PointToObjectSpace(pos)
         
-        local halfX = (obs.size.X / 2) + margin
-        local halfY = (obs.size.Y / 2) + 4
-        local halfZ = (obs.size.Z / 2) + margin
+        local halfX = (obs.size.X / 2) + marginH
+        local halfY = (obs.size.Y / 2) + marginV
+        local halfZ = (obs.size.Z / 2) + marginH
         
         if math.abs(localPos.X) <= halfX and 
            math.abs(localPos.Y) <= halfY and 
@@ -204,120 +247,31 @@ local function isInsideObstacle(pos, safetyMargin)
     return false
 end
 
-local function isPointObstructed(pos)
-    if isInsideObstacle(pos, 8) then
-        return true
-    end
-
-    local checkSize = Vector3.new(4, 4, 4)
-    local overlapParams = OverlapParams.new()
-    overlapParams.FilterType = Enum.RaycastFilterType.Exclude
-    
-    local ignore = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then table.insert(ignore, p.Character) end
-    end
-    overlapParams.FilterDescendantsInstances = ignore
-
-    local parts = Workspace:GetPartBoundsInBox(CFrame.new(pos), checkSize, overlapParams)
-    for i = 1, #parts do
-        local part = parts[i]
-        if part.CanCollide and part.Name ~= "DeliveryHitbox" and part.Name ~= "StealHitbox" then
-            local name = part.Name:lower()
-            if name:find("fuse") or name:find("shop") or name:find("fusemachine") then
-                return true
-            end
-            if part.Size.X * part.Size.Y * part.Size.Z > 2 then
-                return true
-            end
-        end
-    end
-    return false
+local function isPointObstructed(pos, startPos, targetPos)
+    local marginH, marginV = getDynamicMargins(pos, startPos, targetPos)
+    return isInsideObstacle(pos, marginH, marginV)
 end
 
-local function checkDirectSight(startPos, endPos)
+local function checkDirectSight(startPos, endPos, pathStart, pathTarget)
     local distance = (endPos - startPos).Magnitude
-    local steps = math.max(3, math.floor(distance / 6))
+    if distance == 0 then return true end
     
+    local steps = math.max(6, math.floor(distance / 4))
     for i = 1, steps do
         local checkPos = startPos:Lerp(endPos, i / steps)
-        if isPointObstructed(checkPos) then
+        if isPointObstructed(checkPos, pathStart, pathTarget) then
             return false
         end
-    end
-
-    local rp = RaycastParams.new()
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    local ignore = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then table.insert(ignore, p.Character) end
-    end
-    rp.FilterDescendantsInstances = ignore
-    
-    local res = Workspace:Raycast(startPos, endPos - startPos, rp)
-    if res and res.Instance and res.Instance.CanCollide then
-        return false
     end
     return true
 end
 
-local function repelPathFromWalls(path)
-    local repelledPath = {}
-    local repelDistance = 10
-
-    local rp = RaycastParams.new()
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    local ignore = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then table.insert(ignore, p.Character) end
-    end
-    rp.FilterDescendantsInstances = ignore
-
-    local scanDirs = {
-        Vector3.new(1,0,0), Vector3.new(-1,0,0),
-        Vector3.new(0,0,1), Vector3.new(0,0,-1)
-    }
-
-    for idx, pos in ipairs(path) do
-        if idx == 1 or idx == #path then
-            table.insert(repelledPath, pos)
-        else
-            local pushVector = Vector3.zero
-            local activeRepel = false
-
-            for i = 1, #scanDirs do
-                local dir = scanDirs[i]
-                local checkTarget = pos + (dir * repelDistance)
-                local hit = Workspace:Raycast(pos, dir * repelDistance, rp)
-                
-                if (hit and hit.Instance and hit.Instance.CanCollide) or isInsideObstacle(checkTarget, 2) then
-                    local dist = hit and hit.Distance or repelDistance
-                    local weight = (repelDistance - dist) / repelDistance
-                    pushVector = pushVector - dir * weight
-                    activeRepel = true
-                end
-            end
-
-            if activeRepel and pushVector.Magnitude > 0 then
-                local finalPos = pos + (pushVector.Unit * 8)
-                if not isPointObstructed(finalPos) then
-                    table.insert(repelledPath, finalPos)
-                else
-                    table.insert(repelledPath, pos)
-                end
-            else
-                table.insert(repelledPath, pos)
-            end
-        end
-    end
-
-    return repelledPath
-end
-
 local function find3DPathAroundWalls(startPos, targetPos)
+    updateObstacleCache(true)
+    
     local path = {}
-    local maxNodes = 250
-    local nodeDistance = 12
+    local maxNodes = 400
+    local nodeDistance = 10
     
     local openSet = {}
     local closedSet = {}
@@ -331,7 +285,7 @@ local function find3DPathAroundWalls(startPos, targetPos)
     
     local directions = {}
     for x = -1, 1 do
-        for y = -0.3, 0.3, 0.3 do
+        for y = -1.2, 1.2, 0.6 do -- Erhöhter Y-Fokus zum Aufsteigen
             for z = -1, 1 do
                 if not (x == 0 and y == 0 and z == 0) then
                     table.insert(directions, Vector3.new(x, y, z).Unit)
@@ -354,7 +308,7 @@ local function find3DPathAroundWalls(startPos, targetPos)
             end
         end
         
-        if (current.pos - targetPos).Magnitude < nodeDistance or checkDirectSight(current.pos, targetPos) then
+        if (current.pos - targetPos).Magnitude < nodeDistance or checkDirectSight(current.pos, targetPos, startPos, targetPos) then
             foundNode = current
             break
         end
@@ -366,41 +320,43 @@ local function find3DPathAroundWalls(startPos, targetPos)
             local dir = directions[i]
             local neighborPos = current.pos + (dir * nodeDistance)
             
-            if not isPointObstructed(neighborPos) then
-                local alreadyScanned = false
-                for j = 1, #closedSet do
-                    if (closedSet[j] - neighborPos).Magnitude < 5 then
-                        alreadyScanned = true
-                        break
-                    end
-                end
-                
-                if not alreadyScanned then
-                    local gScore = current.g + nodeDistance
-                    local hScore = (neighborPos - targetPos).Magnitude
-                    local fScore = gScore + hScore
-                    
-                    local inOpen = false
-                    for j = 1, #openSet do
-                        local openNode = openSet[j]
-                        if (openNode.pos - neighborPos).Magnitude < 5 then
-                            inOpen = true
-                            if gScore < openNode.g then
-                                openNode.g = gScore
-                                openNode.f = fScore
-                                openNode.parent = current
-                            end
+            if neighborPos.Y >= startPos.Y - 2 and neighborPos.Y <= startPos.Y + 35 then
+                if not isPointObstructed(neighborPos, startPos, targetPos) then
+                    local alreadyScanned = false
+                    for j = 1, #closedSet do
+                        if (closedSet[j] - neighborPos).Magnitude < 3 then
+                            alreadyScanned = true
                             break
                         end
                     end
                     
-                    if not inOpen then
-                        table.insert(openSet, {
-                            pos = neighborPos,
-                            parent = current,
-                            g = gScore,
-                            f = fScore
-                        })
+                    if not alreadyScanned then
+                        local gScore = current.g + nodeDistance
+                        local hScore = (neighborPos - targetPos).Magnitude
+                        local fScore = gScore + hScore
+                        
+                        local inOpen = false
+                        for j = 1, #openSet do
+                            local openNode = openSet[j]
+                            if (openNode.pos - neighborPos).Magnitude < 3 then
+                                inOpen = true
+                                if gScore < openNode.g then
+                                    openNode.g = gScore
+                                    openNode.f = fScore
+                                    openNode.parent = current
+                                end
+                                break
+                            end
+                        end
+                        
+                        if not inOpen then
+                            table.insert(openSet, {
+                                pos = neighborPos,
+                                parent = current,
+                                g = gScore,
+                                f = fScore
+                            })
+                        end
                     end
                 end
             end
@@ -415,23 +371,24 @@ local function find3DPathAroundWalls(startPos, targetPos)
             curr = curr.parent
         end
     else
+        local midpoint = startPos:Lerp(targetPos, 0.5) + Vector3.new(0, 18, 0)
         table.insert(path, startPos)
+        table.insert(path, midpoint)
         table.insert(path, targetPos)
     end
     
-    local repelled = repelPathFromWalls(path)
-
-    local smoothedPath = { repelled[1] }
+    -- Pfad-Glättung (Smoothing)
+    local smoothedPath = { path[1] }
     local i = 1
-    while i < #repelled do
+    while i < #path do
         local nextVisible = i + 1
-        for j = #repelled, i + 2, -1 do
-            if checkDirectSight(smoothedPath[#smoothedPath], repelled[j]) then
+        for j = #path, i + 2, -1 do
+            if checkDirectSight(smoothedPath[#smoothedPath], path[j], startPos, targetPos) then
                 nextVisible = j
                 break
             end
         end
-        table.insert(smoothedPath, repelled[nextVisible])
+        table.insert(smoothedPath, path[nextVisible])
         i = nextVisible
     end
     
@@ -440,6 +397,7 @@ end
 
 -- =============================================================================
 -- SYSTEM METHODEN & LOGIKEN
+-- =============================================================================
 local function getPrioritySelected()
     local PS = getgenv().PrioritySystem
     if PS and PS.SelectedData then
