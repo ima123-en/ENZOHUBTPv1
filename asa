@@ -140,19 +140,12 @@ LoadConfig()
 
 _G.VanishCarpetSpeed = Config.TpSettings.TpV2Speed or 160
 
--- =============================================================================
--- SYSTEM STATUS & DEATH CHECK CORES
--- =============================================================================
 local function isAlive()
     local char = LP.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     return char and hum and hrp and hum.Health > 0 and hrp.Parent == char
 end
-
--- =============================================================================
--- ENZO'S HIGH-ALTITUDE 3D OBSTACLE BYPASS ENGINE (V6 - PERFECT FLY-OVER)
--- =============================================================================
 
 local TARGET_OBSTACLES = {
     "fusemachine",
@@ -165,7 +158,7 @@ local TARGET_OBSTACLES = {
     "tradeplazaportal",
     "summer fuse",
     "summerfuse",
-    "structure base home", -- Nachbar-Plotwände Erkennung
+    "structure base home",
     "wall",
     "fence",
     "railing",
@@ -426,9 +419,6 @@ local function find3DPathAroundWalls(startPos, targetPos)
     return smoothedPath
 end
 
--- =============================================================================
--- SYSTEM METHODEN & LOGIKEN
--- =============================================================================
 local function getPrioritySelected()
     local PS = getgenv().PrioritySystem
     if PS and PS.SelectedData then
@@ -568,7 +558,6 @@ local function softStabilizeHumanoid(hum)
     end
 end
 
--- Flug-Loop (Kugelsicher und konstant schnell mit Steigungs-Bremse und Lagback-Detection)
 local function velMoveThrough(hrp, waypoints, speedOverride)
     if not hrp or not hrp.Parent or #waypoints == 0 then
         return function() end
@@ -653,7 +642,6 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
     end
 end
 
--- SCHUTZ-REISE UND EINWANDFREIE BEWEGUNG
 local function executeTravel(targetPos, speed)
     local char = LP.Character
     local hrp  = char and char:FindFirstChild("HumanoidRootPart")
@@ -685,7 +673,6 @@ local function executeTravel(targetPos, speed)
     vZeroLocal(hrp)
 end
 
--- GEGEN ANTI-CHEAT OPTIMIERTE FIXIERUNG
 local function sxeFixatePosition(hrp, destPos, facingDir)
     if not hrp or not hrp.Parent then return end
     
@@ -735,7 +722,6 @@ local function getBestBasePointInBase(idx, isUpper, playerZ)
     return { pos = coord, look = faceDir }
 end
 
--- ETAGE 3 PLATTFORM
 local ThirdFloorPlatform = Instance.new("Part")
 ThirdFloorPlatform.Name         = "ENZO_TP_ThirdFloor_Floor"
 ThirdFloorPlatform.Size         = Vector3.new(8, 1, 8)
@@ -751,7 +737,6 @@ local function isThirdFloor(brainPos)
     return brainPos and brainPos.Y > 20
 end
 
--- ETAGE 2 FILTER (8.0 BIS 11.0 Y) & PLATTFORM (11 STUDS ABSTAND)
 local SecondFloorPlatform = Instance.new("Part")
 SecondFloorPlatform.Name         = "ENZO_TP_SecondFloor_Floor"
 SecondFloorPlatform.Size         = Vector3.new(8, 1, 8)
@@ -785,7 +770,6 @@ local function updateFloorPlatforms()
         return
     end
 
-    -- Update Etage 3 Plattform
     if isThirdFloor(brainPos) then
         local airPos = Vector3.new(brainPos.X, brainPos.Y - 7.5, brainPos.Z)
         ThirdFloorPlatform.Position   = airPos - Vector3.new(0, 4.5, 0)
@@ -795,7 +779,6 @@ local function updateFloorPlatforms()
         ThirdFloorPlatform.CanCollide = false
     end
 
-    -- Update Etage 2 Plattform
     if isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2 then
         local targetY = brainPos.Y - 11
         SecondFloorPlatform.Position = Vector3.new(brainPos.X, targetY, brainPos.Z)
@@ -823,7 +806,6 @@ RunService.Heartbeat:Connect(function()
     end
     local currentY = hrp.Position.Y
     
-    -- Gurtung für Etage 3
     if ThirdFloorPlatform then
         local topY = ThirdFloorPlatform.Position.Y + ThirdFloorPlatform.Size.Y * 0.5
         if lastYHeartbeat3 and currentY > lastYHeartbeat3 then
@@ -836,7 +818,6 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
-    -- Gurtung für Etage 2
     if SecondFloorPlatform then
         local topY2 = SecondFloorPlatform.Position.Y + SecondFloorPlatform.Size.Y * 0.5
         if lastYHeartbeat3 and currentY > lastYHeartbeat3 then
@@ -1031,7 +1012,6 @@ local function AfterClone_ThirdFloorAware(savedSel)
     vZeroLocal(hrp)
     softStabilizeHumanoid(hum)
 
-    -- Schutz für Etage 3 Plattform
     if isThirdFloor(brainPos) and ThirdFloorPlatform and ThirdFloorPlatform.CanCollide then
         local airPos = Vector3.new(brainPos.X, brainPos.Y - 7.5, brainPos.Z)
         local target = airPos + Vector3.new(0, 2.5, 0)
@@ -1078,7 +1058,6 @@ local function AfterClone_ThirdFloorAware(savedSel)
         return
     end
 
-    -- Schutz für Etage 2 Plattform
     if isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2 and SecondFloorPlatform and SecondFloorPlatform.CanCollide then
         local target = Vector3.new(brainPos.X, brainPos.Y - 11 + 1.0, brainPos.Z)
         local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
@@ -1124,7 +1103,6 @@ local function AfterClone_ThirdFloorAware(savedSel)
         return
     end
 
-    -- Standard Walk mit Lagback-Erkennung
     local targetPos = getFrontOfBrainrot(hrp, brainPos)
     local walkSpeed = Config.TpSettings.WalkToBrainrotSpd or 50
     
@@ -1168,9 +1146,6 @@ local function AfterClone_ThirdFloorAware(savedSel)
     if conn then conn:Disconnect() end
 end
 
--- =============================================================================
--- OPTIMIERTE VELOCITY TELEPORTATION (2-FACH TELEPORT MIT UNTERBRECHUNGS-DETECTION)
--- =============================================================================
 local function instantVelocityTpToBrainrot(sel)
     if not sel then return end
     local brainPos = getBrainrotPosUnified(sel)
@@ -1267,9 +1242,6 @@ local function instantVelocityTpToBrainrot(sel)
     end)
 end
 
--- =============================================================================
--- GEÄNDERTE HOOK- & ANTI-PULL BYPASS METHODE (SOFORTIGE DEAKTIVIERUNG!)
--- =============================================================================
 local function fireGrappleOnceMouseFree()
     local char = LP.Character
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
@@ -1387,14 +1359,12 @@ local function doVelocityTP()
 
     if checkAbort() then isTeleporting = false; return end
 
-    -- ZUWEISUNG DER REISE-GESCHWINDIGKEIT
     local travelSpeed = (Config.ToolChoice or "Grapple") == "Grapple" 
         and (Config.TpSettings.TpGrappleSpeed or 260) 
         or (Config.TpSettings.TpV2Speed or 160)
 
     _G.VanishCarpetSpeed = travelSpeed
 
-    -- ZWEISTUFIGE EINFLUG-REISE ZUR OBBEREN EBENE (APPROACH SYSTEM)
     if (Config.ToolChoice or "Grapple") == "Grapple" then
         local origChoice = Config.ToolChoice
         fireGrappleOnceMouseFree()
@@ -1403,11 +1373,9 @@ local function doVelocityTP()
         equipSelectedTpTool()
         
         if isUpper then
-            -- Schritt 1: Fliege zuerst 8 Studs vor die Base (Auf die sichere Straße)
-            local approachPos = destPos - facingDir * 8
+            local approachPos = destPos - facingDir * 15
             executeTravel(approachPos, travelSpeed)
             
-            -- Schritt 2: Wenn gesund angekommen, fliege geradlinig hinein
             if not checkAbort() then
                 executeTravel(destPos, travelSpeed)
             end
@@ -1420,11 +1388,9 @@ local function doVelocityTP()
     else
         equipSelectedTpTool()
         if isUpper then
-            -- Schritt 1: Fliege zuerst 8 Studs vor die Base (Auf die sichere Straße)
-            local approachPos = destPos - facingDir * 8
+            local approachPos = destPos - facingDir * 15
             executeTravel(approachPos, travelSpeed)
             
-            -- Schritt 2: Wenn gesund angekommen, fliege geradlinig hinein
             if not checkAbort() then
                 executeTravel(destPos, travelSpeed)
             end
@@ -1525,10 +1491,6 @@ local function doVelocityTP()
 end
 
 _G.VanishStartSideTP = doVelocityTP
-
--- =============================================================================
--- GUI ERSTELLUNG & EVENT BINDINGS
--- =============================================================================
 
 local oldGui = PlayerGui:FindFirstChild("ENZO_TP_PANEL")
 if oldGui then oldGui:Destroy() end
