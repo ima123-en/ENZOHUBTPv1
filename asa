@@ -157,16 +157,7 @@ local TARGET_OBSTACLES = {
     "phantomspinwheel",
     "tradeplazaportal",
     "summer fuse",
-    "summerfuse",
-    "structure base home",
-    "wall",
-    "fence",
-    "railing",
-    "divider",
-    "barrier",
-    "gate",
-    "border",
-    "pillar"
+    "summerfuse"
 }
 
 local ObstacleCache = {}
@@ -182,34 +173,32 @@ local function updateObstacleCache(force)
     local descendants = Workspace:GetDescendants()
     for i = 1, #descendants do
         local child = descendants[i]
-        if child and child.Name then
-            local name = child.Name:lower()
-            
-            local isTarget = false
-            for _, targetName in ipairs(TARGET_OBSTACLES) do
-                if name:find(targetName, 1, true) then
-                    isTarget = true
-                    break
-                end
+        local name = child.Name:lower()
+        
+        local isTarget = false
+        for _, targetName in ipairs(TARGET_OBSTACLES) do
+            if name:find(targetName, 1, true) then
+                isTarget = true
+                break
             end
-            
-            if isTarget then
-                if child:IsA("Model") then
-                    local cf, size = child:GetBoundingBox()
-                    if size.Magnitude > 2 then
-                        table.insert(ObstacleCache, {
-                            cf = cf,
-                            size = size,
-                            name = child.Name
-                        })
-                    end
-                elseif child:IsA("BasePart") and child.CanCollide then
+        end
+        
+        if isTarget then
+            if child:IsA("Model") then
+                local cf, size = child:GetBoundingBox()
+                if size.Magnitude > 2 then
                     table.insert(ObstacleCache, {
-                        cf = child.CFrame,
-                        size = child.Size,
+                        cf = cf,
+                        size = size,
                         name = child.Name
                     })
                 end
+            elseif child:IsA("BasePart") and child.CanCollide then
+                table.insert(ObstacleCache, {
+                    cf = child.CFrame,
+                    size = child.Size,
+                    name = child.Name
+                })
             end
         end
     end
@@ -220,20 +209,22 @@ local function getDynamicMargins(pos, startPos, targetPos)
     local distToTarget = (pos - targetPos).Magnitude
     local minDist = math.min(distToStart, distToTarget)
     
-    local baseMarginH = 2.0 
-    local baseMarginV = 1.5 
+    local baseMarginH = 10 
+    local baseMarginV = 3  
     
     if minDist < 15 then
         local factor = minDist / 15
-        local marginH = 1.0 + (baseMarginH - 1.0) * factor
-        local marginV = 0.8 + (baseMarginV - 0.8) * factor
+        local marginH = 1.5 + (baseMarginH - 1.5) * factor
+        local marginV = 1.0 + (baseMarginV - 1.0) * factor
         return marginH, marginV
     end
     
     return baseMarginH, baseMarginV
 end
 
-local function isInsideObstacle(pos, marginH, marginV)
+local function isPointObstructed(pos, startPos, targetPos)
+    local marginH, marginV = getDynamicMargins(pos, startPos, targetPos)
+    
     for i = 1, #ObstacleCache do
         local obs = ObstacleCache[i]
         local localPos = obs.cf:PointToObjectSpace(pos)
@@ -245,23 +236,10 @@ local function isInsideObstacle(pos, marginH, marginV)
         if math.abs(localPos.X) <= halfX and 
            math.abs(localPos.Y) <= halfY and 
            math.abs(localPos.Z) <= halfZ then
-            return true
+            return true 
         end
     end
     return false
-end
-
-local function isPointObstructed(pos, startPos, targetPos)
-    local distToTarget = (pos - targetPos).Magnitude
-    local distToStart = (pos - startPos).Magnitude
-    local minDist = math.min(distToStart, distToTarget)
-    
-    if minDist < 4 then
-        return isInsideObstacle(pos, 0.4, 0.4)
-    end
-    
-    local marginH, marginV = getDynamicMargins(pos, startPos, targetPos)
-    return isInsideObstacle(pos, marginH, marginV)
 end
 
 local function checkDirectSight(startPos, endPos, pathStart, pathTarget)
@@ -279,7 +257,7 @@ local function checkDirectSight(startPos, endPos, pathStart, pathTarget)
 end
 
 local function find3DPathAroundWalls(startPos, targetPos)
-    updateObstacleCache(true)
+    updateObstacleCache(true) 
     
     local path = {}
     local maxNodes = 400
@@ -295,24 +273,12 @@ local function find3DPathAroundWalls(startPos, targetPos)
         f = (startPos - targetPos).Magnitude
     })
     
-    local flatPath = (math.abs(startPos.Y - targetPos.Y) < 5)
-    
     local directions = {}
-    if flatPath then
-        for x = -1, 1 do
+    for x = -1, 1 do
+        for y = -1.2, 1.2, 0.6 do 
             for z = -1, 1 do
-                if not (x == 0 and z == 0) then
-                    table.insert(directions, Vector3.new(x, 0, z).Unit)
-                end
-            end
-        end
-    else
-        for x = -1, 1 do
-            for y = -1, 1 do
-                for z = -1, 1 do
-                    if not (x == 0 and y == 0 and z == 0) then
-                        table.insert(directions, Vector3.new(x, y, z).Unit)
-                    end
+                if not (x == 0 and y == 0 and z == 0) then
+                    table.insert(directions, Vector3.new(x, y, z).Unit)
                 end
             end
         end
@@ -344,10 +310,7 @@ local function find3DPathAroundWalls(startPos, targetPos)
             local dir = directions[i]
             local neighborPos = current.pos + (dir * nodeDistance)
             
-            local yMin = flatPath and (startPos.Y - 1) or (startPos.Y - 2)
-            local yMax = flatPath and (startPos.Y + 1) or (startPos.Y + 35)
-            
-            if neighborPos.Y >= yMin and neighborPos.Y <= yMax then
+            if neighborPos.Y >= startPos.Y - 2 and neighborPos.Y <= startPos.Y + 35 then
                 if not isPointObstructed(neighborPos, startPos, targetPos) then
                     local alreadyScanned = false
                     for j = 1, #closedSet do
@@ -398,7 +361,9 @@ local function find3DPathAroundWalls(startPos, targetPos)
             curr = curr.parent
         end
     else
+        local midpoint = startPos:Lerp(targetPos, 0.5) + Vector3.new(0, 18, 0)
         table.insert(path, startPos)
+        table.insert(path, midpoint)
         table.insert(path, targetPos)
     end
     
@@ -2158,7 +2123,7 @@ PrioritySoundFrame.Parent = SettingsGui
 Instance.new("UICorner", PrioritySoundFrame).CornerRadius = UDim.new(0, 8)
 
 local PrioritySoundLabel = Instance.new("TextLabel")
-PrioritySoundLabel.Size = UDim2.new(0.6, 0, 1, 0)
+PrioritySoundLabel.Size = UDim2.new(0, 110, 1, 0)
 PrioritySoundLabel.Position = UDim2.new(0, 8, 0, 0)
 PrioritySoundLabel.BackgroundTransparency = 1
 PrioritySoundLabel.Text = "Priority Sound"
@@ -2197,7 +2162,7 @@ Floor1When2Frame.Parent = SettingsGui
 Instance.new("UICorner", Floor1When2Frame).CornerRadius = UDim.new(0, 8)
 
 local Floor1When2Label = Instance.new("TextLabel")
-Floor1When2Label.Size = UDim2.new(0.65, 0, 1, 0)
+Floor1When2Label.Size = UDim2.new(0, 150, 1, 0)
 Floor1When2Label.Position = UDim2.new(0, 8, 0, 0)
 Floor1When2Label.BackgroundTransparency = 1
 Floor1When2Label.Text = "Tp Floor 1 when Floor 2"
