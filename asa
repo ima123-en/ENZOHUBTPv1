@@ -164,7 +164,16 @@ local TARGET_OBSTACLES = {
     "phantomspinwheel",
     "tradeplazaportal",
     "summer fuse",
-    "summerfuse"
+    "summerfuse",
+    "structure base home", -- Nachbar-Plotwände Erkennung
+    "wall",
+    "fence",
+    "railing",
+    "divider",
+    "barrier",
+    "gate",
+    "border",
+    "pillar"
 }
 
 local ObstacleCache = {}
@@ -180,32 +189,34 @@ local function updateObstacleCache(force)
     local descendants = Workspace:GetDescendants()
     for i = 1, #descendants do
         local child = descendants[i]
-        local name = child.Name:lower()
-        
-        local isTarget = false
-        for _, targetName in ipairs(TARGET_OBSTACLES) do
-            if name:find(targetName, 1, true) then
-                isTarget = true
-                break
+        if child and child.Name then
+            local name = child.Name:lower()
+            
+            local isTarget = false
+            for _, targetName in ipairs(TARGET_OBSTACLES) do
+                if name:find(targetName, 1, true) then
+                    isTarget = true
+                    break
+                end
             end
-        end
-        
-        if isTarget then
-            if child:IsA("Model") then
-                local cf, size = child:GetBoundingBox()
-                if size.Magnitude > 2 then
+            
+            if isTarget then
+                if child:IsA("Model") then
+                    local cf, size = child:GetBoundingBox()
+                    if size.Magnitude > 2 then
+                        table.insert(ObstacleCache, {
+                            cf = cf,
+                            size = size,
+                            name = child.Name
+                        })
+                    end
+                elseif child:IsA("BasePart") and child.CanCollide then
                     table.insert(ObstacleCache, {
-                        cf = cf,
-                        size = size,
+                        cf = child.CFrame,
+                        size = child.Size,
                         name = child.Name
                     })
                 end
-            elseif child:IsA("BasePart") and child.CanCollide then
-                table.insert(ObstacleCache, {
-                    cf = child.CFrame,
-                    size = child.Size,
-                    name = child.Name
-                })
             end
         end
     end
@@ -216,13 +227,13 @@ local function getDynamicMargins(pos, startPos, targetPos)
     local distToTarget = (pos - targetPos).Magnitude
     local minDist = math.min(distToStart, distToTarget)
     
-    local baseMarginH = 10 -- Gewaltiger horizontaler Abstand (Zwingt zum Drüberfliegen!)
-    local baseMarginV = 3  -- Niedriger vertikaler Abstand (Erlaubt knappes Überfliegen)
+    local baseMarginH = 2.0 
+    local baseMarginV = 1.5 
     
     if minDist < 15 then
         local factor = minDist / 15
-        local marginH = 1.5 + (baseMarginH - 1.5) * factor
-        local marginV = 1.0 + (baseMarginV - 1.0) * factor
+        local marginH = 1.0 + (baseMarginH - 1.0) * factor
+        local marginV = 0.8 + (baseMarginV - 0.8) * factor
         return marginH, marginV
     end
     
@@ -248,6 +259,14 @@ local function isInsideObstacle(pos, marginH, marginV)
 end
 
 local function isPointObstructed(pos, startPos, targetPos)
+    local distToTarget = (pos - targetPos).Magnitude
+    local distToStart = (pos - startPos).Magnitude
+    local minDist = math.min(distToStart, distToTarget)
+    
+    if minDist < 4 then
+        return isInsideObstacle(pos, 0.4, 0.4)
+    end
+    
     local marginH, marginV = getDynamicMargins(pos, startPos, targetPos)
     return isInsideObstacle(pos, marginH, marginV)
 end
@@ -283,12 +302,24 @@ local function find3DPathAroundWalls(startPos, targetPos)
         f = (startPos - targetPos).Magnitude
     })
     
+    local flatPath = (math.abs(startPos.Y - targetPos.Y) < 5)
+    
     local directions = {}
-    for x = -1, 1 do
-        for y = -1.2, 1.2, 0.6 do -- Erhöhter Y-Fokus zum Aufsteigen
+    if flatPath then
+        for x = -1, 1 do
             for z = -1, 1 do
-                if not (x == 0 and y == 0 and z == 0) then
-                    table.insert(directions, Vector3.new(x, y, z).Unit)
+                if not (x == 0 and z == 0) then
+                    table.insert(directions, Vector3.new(x, 0, z).Unit)
+                end
+            end
+        end
+    else
+        for x = -1, 1 do
+            for y = -1, 1 do
+                for z = -1, 1 do
+                    if not (x == 0 and y == 0 and z == 0) then
+                        table.insert(directions, Vector3.new(x, y, z).Unit)
+                    end
                 end
             end
         end
@@ -320,7 +351,10 @@ local function find3DPathAroundWalls(startPos, targetPos)
             local dir = directions[i]
             local neighborPos = current.pos + (dir * nodeDistance)
             
-            if neighborPos.Y >= startPos.Y - 2 and neighborPos.Y <= startPos.Y + 35 then
+            local yMin = flatPath and (startPos.Y - 1) or (startPos.Y - 2)
+            local yMax = flatPath and (startPos.Y + 1) or (startPos.Y + 35)
+            
+            if neighborPos.Y >= yMin and neighborPos.Y <= yMax then
                 if not isPointObstructed(neighborPos, startPos, targetPos) then
                     local alreadyScanned = false
                     for j = 1, #closedSet do
@@ -371,13 +405,10 @@ local function find3DPathAroundWalls(startPos, targetPos)
             curr = curr.parent
         end
     else
-        local midpoint = startPos:Lerp(targetPos, 0.5) + Vector3.new(0, 18, 0)
         table.insert(path, startPos)
-        table.insert(path, midpoint)
         table.insert(path, targetPos)
     end
     
-    -- Pfad-Glättung (Smoothing)
     local smoothedPath = { path[1] }
     local i = 1
     while i < #path do
@@ -568,7 +599,6 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
             return
         end
 
-        -- Zurücksetzen der Mindestdistanz, wenn sich der Wegpunkt ändert
         if wpIdx ~= lastWpIdx then
             achievedMinDist = math.huge
             lastWpIdx = wpIdx
@@ -578,10 +608,9 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
         local diff = target - hrp.Position
         local mag = diff.Magnitude
 
-        -- Lagback / Rubberband Detection
         if mag < achievedMinDist then
             achievedMinDist = mag
-        elseif mag > achievedMinDist + 30 then -- Zurückgezogen um 30+ Studs
+        elseif mag > achievedMinDist + 30 then
             _G.TPStatus = "lagback_detected_aborted"
             hardStop()
             return
@@ -604,7 +633,6 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
             local baseSpeed = speedOverride or (_G.VanishCarpetSpeed or Config.TpSettings.TpV2Speed or 160)
             local spd = baseSpeed
             
-            -- STEIGUNGS-BREMSE (Verhindert sofortigen Ban bei Aufwärtsbewegung)
             if diff.Y > 2 then 
                 local slope = diff.Y / mag
                 if slope > 0.3 then 
@@ -612,12 +640,10 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
                 end
             end
             
-            -- KONTROLLIERTE LANDUNGS-BREMSE (Zusätzliche Bremse kurz vor dem Ziel)
             if wpIdx == #waypoints and mag < 15 then
                 spd = spd / 2
             end
             
-            -- Bewegung physikalisch anwenden
             hrp.AssemblyLinearVelocity = dir * spd
             softStabilizeHumanoid(hrp.Parent:FindFirstChildOfClass("Humanoid"))
         end
@@ -625,6 +651,38 @@ local function velMoveThrough(hrp, waypoints, speedOverride)
     return function()
         hardStop()
     end
+end
+
+-- SCHUTZ-REISE UND EINWANDFREIE BEWEGUNG
+local function executeTravel(targetPos, speed)
+    local char = LP.Character
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+    
+    vZeroLocal(hrp)
+    softStabilizeHumanoid(hum)
+    
+    local route = find3DPathAroundWalls(hrp.Position, targetPos)
+    local stopMove = velMoveThrough(hrp, route, speed)
+    
+    local t0 = tick()
+    local timeout = 8
+    local done = false
+    
+    while tick() - t0 < timeout do
+        if not isAlive() or _G.TPStatus == "lagback_detected_aborted" or _G.TPStatus == "player_died_aborted" then 
+            break 
+        end
+        if (hrp.Position - targetPos).Magnitude < 4 then
+            done = true
+            break
+        end
+        softStabilizeHumanoid(hum)
+        task.wait(0.02)
+    end
+    stopMove()
+    vZeroLocal(hrp)
 end
 
 -- GEGEN ANTI-CHEAT OPTIMIERTE FIXIERUNG
@@ -1140,7 +1198,6 @@ local function instantVelocityTpToBrainrot(sel)
 
     local freezePosition = targetPos + Vector3.new(0, 1.5, 0)
 
-    -- Führt exakt 2 Phasen-Teleports aus
     for phase = 1, 2 do
         local char = LP.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
@@ -1162,7 +1219,7 @@ local function instantVelocityTpToBrainrot(sel)
         table.insert(tpConnections, RunService.RenderStepped:Connect(lockAtTarget))
         table.insert(tpConnections, RunService.Heartbeat:Connect(lockAtTarget))
 
-        task.wait(0.12) -- Extrem kurzer Frame-Lock
+        task.wait(0.12)
 
         for _, conn in ipairs(tpConnections) do
             conn:Disconnect()
@@ -1182,10 +1239,9 @@ local function instantVelocityTpToBrainrot(sel)
             hum:ChangeState(Enum.HumanoidStateType.Running)
         end
 
-        -- Server Rollback Check nach unanchor
         if isAlive() then
             local actualDist = (hrp.Position - freezePosition).Magnitude
-            if actualDist > 35 then -- Server verweigert die Positionierung
+            if actualDist > 35 then 
                 _G.TPStatus = "lagback_detected_aborted"
                 return
             end
@@ -1194,7 +1250,6 @@ local function instantVelocityTpToBrainrot(sel)
             return
         end
 
-        -- Wartet exakt 0.2 Sekunden zwischen den Phasen
         if phase < 2 then
             task.wait(0.2)
         end
@@ -1256,7 +1311,6 @@ local function fireGrappleOnceMouseFree()
     PlayerMouse.Target = workspace.Terrain
     local ok = pcall(function() hook:Activate() end)
     
-    -- Deaktiviert den Bypass SOFORT nach Schuss-Ausführung
     task.spawn(function()
         task.wait(0.05)
         if bypassConnection then 
@@ -1270,46 +1324,6 @@ local function fireGrappleOnceMouseFree()
     end)
     
     return ok
-end
-
-local function doGrappleHookThenCarpetMove(destPos, facingDir)
-    local char = LP.Character
-    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-    local hum  = char and char:FindFirstChildOfClass("Humanoid")
-    if not hrp then return end
-    softStabilizeHumanoid(hum)
-    local origChoice = Config.ToolChoice
-    if origChoice == "Grapple" then
-        fireGrappleOnceMouseFree()
-        task.wait(0.15)
-        Config.ToolChoice = "Carpet"
-    end
-    equipSelectedTpTool()
-    _G.VanishCarpetSpeed = Config.TpSettings.TpGrappleSpeed or 260
-    vZeroLocal(hrp)
-    
-    local route = find3DPathAroundWalls(hrp.Position, destPos)
-    local stopMove = velMoveThrough(hrp, route, Config.TpSettings.TpGrappleSpeed or 260)
-    local t0 = tick()
-    local timeout = 8
-    while tick() - t0 < timeout do
-        if not isAlive() then 
-            _G.TPStatus = "player_died_aborted"
-            break 
-        end
-        if _G.TPStatus == "lagback_detected_aborted" then 
-            break 
-        end
-        if (hrp.Position - destPos).Magnitude < 4 then
-            break
-        end
-        softStabilizeHumanoid(hum)
-        task.wait(0.02)
-    end
-    stopMove()
-    sxeFixatePosition(hrp, destPos, facingDir)
-    Config.ToolChoice = origChoice
-    SaveConfig()
 end
 
 local isTeleporting = false
@@ -1373,31 +1387,50 @@ local function doVelocityTP()
 
     if checkAbort() then isTeleporting = false; return end
 
+    -- ZUWEISUNG DER REISE-GESCHWINDIGKEIT
+    local travelSpeed = (Config.ToolChoice or "Grapple") == "Grapple" 
+        and (Config.TpSettings.TpGrappleSpeed or 260) 
+        or (Config.TpSettings.TpV2Speed or 160)
+
+    _G.VanishCarpetSpeed = travelSpeed
+
+    -- ZWEISTUFIGE EINFLUG-REISE ZUR OBBEREN EBENE (APPROACH SYSTEM)
     if (Config.ToolChoice or "Grapple") == "Grapple" then
-        doGrappleHookThenCarpetMove(destPos, facingDir)
+        local origChoice = Config.ToolChoice
+        fireGrappleOnceMouseFree()
+        task.wait(0.15)
+        Config.ToolChoice = "Carpet"
+        equipSelectedTpTool()
+        
+        if isUpper then
+            -- Schritt 1: Fliege zuerst 8 Studs vor die Base (Auf die sichere Straße)
+            local approachPos = destPos - facingDir * 8
+            executeTravel(approachPos, travelSpeed)
+            
+            -- Schritt 2: Wenn gesund angekommen, fliege geradlinig hinein
+            if not checkAbort() then
+                executeTravel(destPos, travelSpeed)
+            end
+        else
+            executeTravel(destPos, travelSpeed)
+        end
+        
+        Config.ToolChoice = origChoice
+        SaveConfig()
     else
         equipSelectedTpTool()
-        _G.VanishCarpetSpeed = (Config.ToolChoice or "Grapple") == "Grapple"
-            and (Config.TpSettings.TpGrappleSpeed or 260)
-            or (Config.TpSettings.TpV2Speed or 160)
-        vZeroLocal(hrp)
-        softStabilizeHumanoid(hum)
-        local speedOverride = _G.VanishCarpetSpeed
-        
-        local route = find3DPathAroundWalls(hrp.Position, destPos)
-        local stopMove = velMoveThrough(hrp, route, speedOverride)
-        local t0 = tick()
-        local timeout = 8
-        while tick() - t0 < timeout do
-            if checkAbort() then break end
-            if (hrp.Position - destPos).Magnitude < 4 then
-                break
+        if isUpper then
+            -- Schritt 1: Fliege zuerst 8 Studs vor die Base (Auf die sichere Straße)
+            local approachPos = destPos - facingDir * 8
+            executeTravel(approachPos, travelSpeed)
+            
+            -- Schritt 2: Wenn gesund angekommen, fliege geradlinig hinein
+            if not checkAbort() then
+                executeTravel(destPos, travelSpeed)
             end
-            softStabilizeHumanoid(hum)
-            task.wait(0.02)
+        else
+            executeTravel(destPos, travelSpeed)
         end
-        stopMove()
-        vZeroLocal(hrp)
     end
 
     if checkAbort() then isTeleporting = false; return end
