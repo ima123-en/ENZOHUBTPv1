@@ -43,18 +43,18 @@ local CARPET_NAMES = {
     "Waverider" 
 }
 
-local BASES_LOW = {
-    [1]=Vector3.new(-476.52,-2,220.94),[2]=Vector3.new(-476.52,-2,113.77),
-    [3]=Vector3.new(-476.52,-2,6.18),[4]=Vector3.new(-476.52,-2,-101.07),
-    [5]=Vector3.new(-342.66,-2,221.45),[6]=Vector3.new(-342.66,-2,113.41),
-    [7]=Vector3.new(-342.66,-2,6.25),[8]=Vector3.new(-342.66,-2,-99.73),
+-- =====================================================================
+-- SOLZ TELEPORT 1.1 HIGH-PRECISION COORDINATES
+-- =====================================================================
+local UPPER = {
+    B = {{coord=Vector3.new(-487.921448,16.850713,-75.768013),facing="NORTH"},{coord=Vector3.new(-332.379730,16.850722,-75.762100),facing="NORTH"},{coord=Vector3.new(-487.134918,16.850713,-18.094154),facing="SOUTH"},{coord=Vector3.new(-316.300171,16.850713,-17.845898),facing="SOUTH"}},
+    C = {{coord=Vector3.new(-330.765381,16.850713,31.424425),facing="NORTH"},{coord=Vector3.new(-502.989349,16.850713,31.172430),facing="NORTH"},{coord=Vector3.new(-489.077087,16.850713,89.010147),facing="SOUTH"},{coord=Vector3.new(-330.908936,16.850713,88.930145),facing="SOUTH"}},
+    D = {{coord=Vector3.new(-331.264893,16.850713,138.209167),facing="NORTH"},{coord=Vector3.new(-487.935181,16.850713,138.026321),facing="NORTH"},{coord=Vector3.new(-487.774933,16.850713,195.882538),facing="SOUTH"},{coord=Vector3.new(-330.799133,16.850575,196.022354),facing="SOUTH"}},
 }
-
-local BASES_HIGH = {
-    [1]=Vector3.new(-479.51,18,220.94),[2]=Vector3.new(-479.51,18,113.77),
-    [3]=Vector3.new(-479.51,18,6.18),[4]=Vector3.new(-479.51,18,-101.07),
-    [5]=Vector3.new(-339.48,18,221.45),[6]=Vector3.new(-339.48,18,113.41),
-    [7]=Vector3.new(-339.48,18,6.25),[8]=Vector3.new(-339.48,18,-99.73),
+local LOWER = {
+    B = {{coord=Vector3.new(-335.725586,-3.048217,-74.984589),facing="NORTH"},{coord=Vector3.new(-503.214233,-3.048217,-75.043137),facing="NORTH"},{coord=Vector3.new(-483.619385,-3.718430,-18.844337),facing="SOUTH"},{coord=Vector3.new(-316.147095,-3.048218,-18.818844),facing="SOUTH"}},
+    C = {{coord=Vector3.new(-335.985413,-3.048218,32.051426),facing="NORTH"},{coord=Vector3.new(-503.277008,-3.048217,31.956175),facing="NORTH"},{coord=Vector3.new(-483.749390,-3.048218,88.147003),facing="SOUTH"},{coord=Vector3.new(-315.793823,-3.048217,88.163979),facing="SOUTH"}},
+    D = {{coord=Vector3.new(-335.476654,-3.048218,139.001083),facing="NORTH"},{coord=Vector3.new(-503.710083,-3.048218,138.989883),facing="NORTH"},{coord=Vector3.new(-315.654938,-3.048218,195.302444),facing="SOUTH"},{coord=Vector3.new(-483.859253,-3.048218,195.269043),facing="SOUTH"}},
 }
 
 local _DIRS = { Vector3.new(1,0,0), Vector3.new(-1,0,0), Vector3.new(0,0,1), Vector3.new(0,0,-1) }
@@ -450,6 +450,21 @@ local function GetCurrentTpToolName()
     return n
 end
 
+-- equipAnyCarpet MUSS vor allen anderen Funktionen deklariert sein!
+local function equipAnyCarpet()
+    local char = LP.Character
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return nil end
+    for _, n in ipairs(CARPET_NAMES) do
+        local t = findToolLocal(n)
+        if t and t:IsA("Tool") then
+            if t.Parent ~= char then pcall(function() hum:EquipTool(t) end) end
+            return n
+        end
+    end
+    return nil
+end
+
 local function equipSelectedTpTool()
     local char = LP.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -475,20 +490,6 @@ local function equipSelectedTpTool()
                 if t.Parent ~= char then pcall(function() hum:EquipTool(t) end) end
                 return n
             end
-        end
-    end
-    return nil
-end
-
-local function equipAnyCarpet()
-    local char = LP.Character
-    local hum  = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then return nil end
-    for _, n in ipairs(CARPET_NAMES) do
-        local t = findToolLocal(n)
-        if t and t:IsA("Tool") then
-            if t.Parent ~= char then pcall(function() hum:EquipTool(t) end) end
-            return n
         end
     end
     return nil
@@ -670,22 +671,23 @@ local function sxeFixatePosition(hrp, destPos, facingDir)
     end
 end
 
-local function getBaseIdxByPetPos(pos)
-    local closest, dist = 1, math.huge
-    for i = 1, 8 do
-        local b = BASES_LOW[i]
-        local d = (pos.X - b.X)^2 + (pos.Z - b.Z)^2
-        if d < dist then dist = d; closest = i end
+-- =====================================================================
+-- SOLZ HIGH-PRECISION CLOSEST POINT DETECTOR (Ersetzt die alte getBase/getBest Logik)
+-- =====================================================================
+local function findClosest(petPos, coordTable)
+    local best, bestKey, bestDist = nil, nil, math.huge
+    for skyKey, coords in pairs(coordTable) do
+        for _, data in ipairs(coords) do
+            local c = data.coord
+            local d = math.sqrt((petPos.X - c.X)^2 + (petPos.Z - c.Z)^2)
+            if d < bestDist then
+                bestDist = d
+                best = data
+                bestKey = skyKey
+            end
+        end
     end
-    return closest
-end
-
-local function getBestBasePointInBase(idx, isUpper, playerZ)
-    local base = isUpper and BASES_HIGH[idx] or BASES_LOW[idx]
-    local frontZ = math.clamp(playerZ - base.Z, -18, 18) + base.Z
-    local coord = Vector3.new(base.X, isUpper and 16.85 or -3.04, frontZ)
-    local faceDir = (idx <= 4) and Vector3.new(-1, 0, 0) or Vector3.new(1, 0, 0)
-    return { pos = coord, look = faceDir }
+    return best, bestKey
 end
 
 local ThirdFloorPlatform = Instance.new("Part")
@@ -1267,6 +1269,9 @@ end
 local isTeleporting = false
 _G.TPStatus = "idle"
 
+-- =====================================================================
+-- VELOCITY TELEPORT ENGINE MIT SOLZ 1.1 KOORDINATEN DETEKTIERUNG
+-- =====================================================================
 local function doVelocityTP()
     if isTeleporting then return end
     isTeleporting = true
@@ -1313,15 +1318,23 @@ local function doVelocityTP()
 
     playPrioritySound()
 
-    local baseIdx   = getBaseIdxByPetPos(petPos)
+    -- Solz 1.1 Floor-Detektierung
     local isUpper   = petPos.Y > 7
     if isSecondFloor(petPos) and Config.TpSettings.TpFloor1WhenFloor2 then
         isUpper = false
     end
+    local coordTable = isUpper and UPPER or LOWER
     
-    local bestEntry = getBestBasePointInBase(baseIdx, isUpper, hrp.Position.Z)
-    local destPos   = bestEntry.pos
-    local facingDir = bestEntry.look
+    -- High-Precision Solz 1.1 Sektor & Koordinaten-Auflösung
+    local closestData, skyKey = findClosest(petPos, coordTable)
+    if not closestData or not skyKey then
+        _G.TPStatus = "no_valid_base_points"
+        isTeleporting = false
+        return
+    end
+
+    local destPos   = closestData.coord
+    local facingDir = closestData.facing == "NORTH" and Vector3.new(0, 0, -1) or Vector3.new(0, 0, 1)
 
     if checkAbort() then isTeleporting = false; return end
 
@@ -1338,6 +1351,7 @@ local function doVelocityTP()
         Config.ToolChoice = "Carpet"
         equipSelectedTpTool()
         
+        -- Wegfindung & Teleportation zu den exakten Solz-Koordinaten
         if isUpper then
             local approachPos = destPos - facingDir * 15
             executeTravel(approachPos, travelSpeed)
@@ -1526,7 +1540,6 @@ Divider.BorderSizePixel = 0
 Divider.Parent = Main
 
 local TpButton = Instance.new("TextButton")
-Button = TpButton
 TpButton.Size = UDim2.new(0.9, 0, 0, 40)
 TpButton.Position = UDim2.new(0.05, 0, 0, 60)
 TpButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
@@ -1538,7 +1551,9 @@ TpButton.TextColor3 = Color3.fromRGB(190, 190, 200)
 TpButton.AutoButtonColor = false
 TpButton.Parent = Main
 Instance.new("UICorner", TpButton).CornerRadius = UDim.new(0, 8)
-Instance.new("UIStroke", TpButton).Color = Color3.fromRGB(40, 40, 48)
+local ButtonStroke = Instance.new("UIStroke")
+ButtonStroke.Color = Color3.fromRGB(40, 40, 48)
+ButtonStroke.Parent = TpButton
 TpButton.MouseButton1Click:Connect(doVelocityTP)
 
 local StatusBar = Instance.new("Frame")
@@ -1681,7 +1696,6 @@ Instance.new("UICorner", TpKeyBg).CornerRadius = UDim.new(0, 6)
 
 local TpKeyButton = Instance.new("TextButton")
 TpKeyButton.Size = UDim2.new(1, 0, 1, 0)
-MiddleKeyButton = TpKeyButton
 TpKeyButton.BackgroundTransparency = 1
 TpKeyButton.Font = Enum.Font.GothamBold
 TpKeyButton.TextSize = 11
