@@ -26,6 +26,14 @@ local PlayerMouse   = require(Packages:WaitForChild("PlayerMouse"))
 
 local SAVE_KEY = "ENZO_TP_PANEL_" .. LP.UserId
 
+local THEME_BG = Color3.fromRGB(12, 12, 14)
+local THEME_PANEL = Color3.fromRGB(18, 18, 22)
+local THEME_BORDER = Color3.fromRGB(30, 30, 35)
+local THEME_ACCENT = Color3.fromRGB(114, 156, 219)
+local THEME_TEXT_PRIMARY = Color3.fromRGB(240, 240, 245)
+local THEME_TEXT_MUTED = Color3.fromRGB(140, 140, 150)
+local THEME_FONT = Enum.Font.RobotoMono
+
 local REAL_TOOL_NAMES = {
     Carpet     = "Flying Carpet",
     Grapple    = "Grapple Hook",
@@ -396,6 +404,10 @@ end
 local function getBrainrotPosUnified(sel)
     if not sel then return nil end
     if sel.worldPosition then return sel.worldPosition end
+    if sel.pos then
+        sel.worldPosition = sel.pos
+        return sel.pos
+    end
     local plots = Workspace:FindFirstChild("Plots")
     if plots and sel.plot and sel.slot then
         local plot    = plots:FindFirstChild(sel.plot)
@@ -1482,12 +1494,12 @@ local Main = Instance.new("Frame")
 Main.Name = "Main"
 Main.Size = UDim2.new(0, 270, 0, 340)
 Main.Position = Config.GuiPos or UDim2.new(1, -285, 0, 70)
-Main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Main.BackgroundColor3 = THEME_BG
 Main.BorderSizePixel = 0
 Main.Parent = ScreenGui
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 2)
 local Stroke = Instance.new("UIStroke")
-Stroke.Color = Color3.fromRGB(60, 60, 60)
+Stroke.Color = THEME_BORDER
 Stroke.Thickness = 1
 Stroke.Parent = Main
 
@@ -1501,9 +1513,9 @@ HeaderTitle.Size = UDim2.new(1, 0, 0, 24)
 HeaderTitle.Position = UDim2.new(0, 0, 0, 6)
 HeaderTitle.BackgroundTransparency = 1
 HeaderTitle.Text = "TP PANEL"
-HeaderTitle.Font = Enum.Font.GothamBold
-HeaderTitle.TextSize = 16
-HeaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+HeaderTitle.Font = THEME_FONT
+HeaderTitle.TextSize = 14
+HeaderTitle.TextColor3 = THEME_TEXT_PRIMARY
 HeaderTitle.TextXAlignment = Enum.TextXAlignment.Center
 HeaderTitle.Parent = Header
 
@@ -1511,17 +1523,17 @@ local HeaderSub = Instance.new("TextLabel")
 HeaderSub.Size = UDim2.new(1, 0, 0, 18)
 HeaderSub.Position = UDim2.new(0, 0, 0, 26)
 HeaderSub.BackgroundTransparency = 1
-HeaderSub.Text = "Brainrot Teleport"
-HeaderSub.Font = Enum.Font.Gotham
-HeaderSub.TextSize = 12
-HeaderSub.TextColor3 = Color3.fromRGB(190, 190, 190)
+HeaderSub.Text = "BRAINROT TELEPORT"
+HeaderSub.Font = THEME_FONT
+HeaderSub.TextSize = 10
+HeaderSub.TextColor3 = THEME_TEXT_MUTED
 HeaderSub.TextXAlignment = Enum.TextXAlignment.Center
 HeaderSub.Parent = Header
 
 local Divider = Instance.new("Frame")
 Divider.Size = UDim2.new(0.88, 0, 0, 1)
 Divider.Position = UDim2.new(0.06, 0, 0, 50)
-Divider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Divider.BackgroundColor3 = THEME_BORDER
 Divider.BorderSizePixel = 0
 Divider.Parent = Main
 
@@ -1529,48 +1541,53 @@ local TpButton = Instance.new("TextButton")
 Button = TpButton
 TpButton.Size = UDim2.new(0.9, 0, 0, 40)
 TpButton.Position = UDim2.new(0.05, 0, 0, 60)
-TpButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+TpButton.BackgroundColor3 = THEME_PANEL
 TpButton.BorderSizePixel = 0
-TpButton.Text = "TP to Priority Brainrot"
-TpButton.Font = Enum.Font.GothamBold
-TpButton.TextSize = 13
-TpButton.TextColor3 = Color3.fromRGB(190, 190, 200)
+TpButton.Text = "TP TO PRIORITY BRAINROT"
+TpButton.Font = THEME_FONT
+TpButton.TextSize = 11
+TpButton.TextColor3 = THEME_TEXT_PRIMARY
 TpButton.AutoButtonColor = false
 TpButton.Parent = Main
-Instance.new("UICorner", TpButton).CornerRadius = UDim.new(0, 8)
-Instance.new("UIStroke", TpButton).Color = Color3.fromRGB(40, 40, 48)
+Instance.new("UICorner", TpButton).CornerRadius = UDim.new(0, 2)
+local TpButtonStroke = Instance.new("UIStroke", TpButton)
+TpButtonStroke.Color = THEME_BORDER
+TpButtonStroke.Thickness = 1
 TpButton.MouseButton1Click:Connect(doVelocityTP)
 
 local StatusBar = Instance.new("Frame")
 StatusBar.Size = UDim2.new(0.9, 0, 0, 24)
 StatusBar.Position = UDim2.new(0.05, 0, 0, 108)
-StatusBar.BackgroundColor3 = Color3.fromRGB(16, 16, 19)
+StatusBar.BackgroundColor3 = THEME_PANEL
 StatusBar.BorderSizePixel = 0
 StatusBar.Parent = Main
-Instance.new("UICorner", StatusBar).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", StatusBar).CornerRadius = UDim.new(0, 2)
+local StatusBarStroke = Instance.new("UIStroke", StatusBar)
+StatusBarStroke.Color = THEME_BORDER
+StatusBarStroke.Thickness = 1
 
 local StatusDot = Instance.new("Frame")
 StatusDot.Size = UDim2.new(0, 6, 0, 6)
 StatusDot.Position = UDim2.new(0, 8, 0.5, -3)
-StatusDot.BackgroundColor3 = Color3.fromRGB(100, 100, 110)
+StatusDot.BackgroundColor3 = THEME_ACCENT
 StatusDot.BorderSizePixel = 0
 StatusDot.Parent = StatusBar
-Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(1, 0)
+Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(0, 1)
 
 local StatusText = Instance.new("TextLabel")
 StatusText.Size = UDim2.new(1, -22, 1, 0)
 StatusText.Position = UDim2.new(0, 20, 0, 0)
 StatusText.BackgroundTransparency = 1
-StatusText.Text = "Idle"
-StatusText.TextColor3 = Color3.fromRGB(100, 100, 110)
-StatusText.Font = Enum.Font.Gotham
+StatusText.Text = "IDLE"
+StatusText.TextColor3 = THEME_TEXT_MUTED
+StatusText.Font = THEME_FONT
 StatusText.TextSize = 10
 StatusText.TextXAlignment = Enum.TextXAlignment.Left
 StatusText.Parent = StatusBar
 
 task.spawn(function()
     while Main and Main.Parent do
-        StatusText.Text = tostring(_G.TPStatus or "idle")
+        StatusText.Text = tostring(_G.TPStatus or "idle"):upper()
         task.wait(0.1)
     end
 end)
@@ -1578,19 +1595,22 @@ end)
 local ToolFrame = Instance.new("Frame")
 ToolFrame.Size = UDim2.new(0.9, 0, 0, 40)
 ToolFrame.Position = UDim2.new(0.05, 0, 0, 140)
-ToolFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+ToolFrame.BackgroundColor3 = THEME_PANEL
 ToolFrame.BorderSizePixel = 0
 ToolFrame.Parent = Main
-Instance.new("UICorner", ToolFrame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", ToolFrame).CornerRadius = UDim.new(0, 2)
+local ToolFrameStroke = Instance.new("UIStroke", ToolFrame)
+ToolFrameStroke.Color = THEME_BORDER
+ToolFrameStroke.Thickness = 1
 
 local ToolLabel = Instance.new("TextLabel")
 ToolLabel.Size = UDim2.new(0.24, 0, 1, 0)
 ToolLabel.Position = UDim2.new(0, 8, 0, 0)
 ToolLabel.BackgroundTransparency = 1
-ToolLabel.Text = "TP Tool"
-ToolLabel.Font = Enum.Font.Gotham
-ToolLabel.TextSize = 11
-ToolLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
+ToolLabel.Text = "TOOL"
+ToolLabel.Font = THEME_FONT
+ToolLabel.TextSize = 10
+ToolLabel.TextColor3 = THEME_TEXT_PRIMARY
 ToolLabel.TextXAlignment = Enum.TextXAlignment.Left
 ToolLabel.Parent = ToolFrame
 
@@ -1599,11 +1619,11 @@ local ToolButtons = {}
 local function refreshToolButtons()
     for name, btn in pairs(ToolButtons) do
         if name == Config.ToolChoice then
-            btn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
-            btn.TextColor3       = Color3.fromRGB(230, 230, 240)
+            btn.BackgroundColor3 = THEME_BG
+            btn.TextColor3       = THEME_ACCENT
         else
-            btn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-            btn.TextColor3       = Color3.fromRGB(180, 180, 190)
+            btn.BackgroundColor3 = THEME_BG
+            btn.TextColor3       = THEME_TEXT_MUTED
         end
     end
 end
@@ -1612,15 +1632,18 @@ local function makeToolButton(text, key, xScale, width)
     local b = Instance.new("TextButton")
     b.Size = UDim2.new(0, width, 0, 18)
     b.Position = UDim2.new(xScale, 0, 0.5, -9)
-    b.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    b.BackgroundColor3 = THEME_BG
     b.BorderSizePixel = 0
     b.Text = text
-    b.Font = Enum.Font.GothamBold
+    b.Font = THEME_FONT
     b.TextSize = 9
-    b.TextColor3 = Color3.fromRGB(180, 180, 190)
+    b.TextColor3 = THEME_TEXT_MUTED
     b.AutoButtonColor = false
     b.Parent = ToolFrame
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 2)
+    local bStroke = Instance.new("UIStroke", b)
+    bStroke.Color = THEME_BORDER
+    bStroke.Thickness = 1
     ToolButtons[key] = b
     b.MouseButton1Click:Connect(function()
         Config.ToolChoice        = key
@@ -1635,12 +1658,12 @@ local function makeToolButton(text, key, xScale, width)
     end)
 end
 
-makeToolButton("Carpet", "Carpet",     0.26, 32)
-makeToolButton("Hook",   "Grapple",    0.40, 28)
-makeToolButton("Sleigh", "Sleigh",     0.53, 30)
-makeToolButton("Wings",  "Wings",      0.67, 28)
-makeToolButton("Broom",  "Broom",      0.80, 28)
-makeToolButton("Wave",   "Waverider",  0.92, 28)
+makeToolButton("CARPET", "Carpet",     0.26, 34)
+makeToolButton("HOOK",   "Grapple",    0.41, 30)
+makeToolButton("SLEIGH", "Sleigh",     0.55, 32)
+makeToolButton("WINGS",  "Wings",      0.70, 30)
+makeToolButton("BROOM",  "Broom",      0.83, 30)
+makeToolButton("WAVE",   "Waverider",  0.95, 30)
 
 if not REAL_TOOL_NAMES[Config.ToolChoice] then
     Config.ToolChoice = "Grapple"
@@ -1655,37 +1678,43 @@ refreshToolButtons()
 local TpKeyFrame = Instance.new("Frame")
 TpKeyFrame.Size = UDim2.new(0.9, 0, 0, 26)
 TpKeyFrame.Position = UDim2.new(0.05, 0, 0, 184)
-TpKeyFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+TpKeyFrame.BackgroundColor3 = THEME_PANEL
 TpKeyFrame.BorderSizePixel = 0
 TpKeyFrame.Parent = Main
-Instance.new("UICorner", TpKeyFrame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", TpKeyFrame).CornerRadius = UDim.new(0, 2)
+local TpKeyFrameStroke = Instance.new("UIStroke", TpKeyFrame)
+TpKeyFrameStroke.Color = THEME_BORDER
+TpKeyFrameStroke.Thickness = 1
 
 local TpKeyLabel = Instance.new("TextLabel")
 TpKeyLabel.Size = UDim2.new(0.6, 0, 1, 0)
 TpKeyLabel.Position = UDim2.new(0, 10, 0, 0)
 TpKeyLabel.BackgroundTransparency = 1
-TpKeyLabel.Text = "TP Key"
-TpKeyLabel.Font = Enum.Font.Gotham
-TpKeyLabel.TextSize = 12
-TpKeyLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
+TpKeyLabel.Text = "TP KEY"
+TpKeyLabel.Font = THEME_FONT
+TpKeyLabel.TextSize = 11
+TpKeyLabel.TextColor3 = THEME_TEXT_PRIMARY
 TpKeyLabel.TextXAlignment = Enum.TextXAlignment.Left
 TpKeyLabel.Parent = TpKeyFrame
 
 local TpKeyBg = Instance.new("Frame")
 TpKeyBg.Size = UDim2.new(0, 60, 0, 22)
 TpKeyBg.Position = UDim2.new(1, -70, 0.5, -11)
-TpKeyBg.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+TpKeyBg.BackgroundColor3 = THEME_BG
 TpKeyBg.BorderSizePixel = 0
 TpKeyBg.Parent = TpKeyFrame
-Instance.new("UICorner", TpKeyBg).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", TpKeyBg).CornerRadius = UDim.new(0, 2)
+local TpKeyBgStroke = Instance.new("UIStroke", TpKeyBg)
+TpKeyBgStroke.Color = THEME_BORDER
+TpKeyBgStroke.Thickness = 1
 
 local TpKeyButton = Instance.new("TextButton")
 TpKeyButton.Size = UDim2.new(1, 0, 1, 0)
 MiddleKeyButton = TpKeyButton
 TpKeyButton.BackgroundTransparency = 1
-TpKeyButton.Font = Enum.Font.GothamBold
+TpKeyButton.Font = THEME_FONT
 TpKeyButton.TextSize = 11
-TpKeyButton.TextColor3 = Color3.fromRGB(200, 200, 210)
+TpKeyButton.TextColor3 = THEME_TEXT_PRIMARY
 TpKeyButton.Text = Config.TpSettings.TpKey or "T"
 TpKeyButton.Parent = TpKeyBg
 
@@ -1695,65 +1724,74 @@ local TpKeyCode = Enum.KeyCode[Config.TpSettings.TpKey] or Enum.KeyCode.T
 TpKeyButton.MouseButton1Click:Connect(function()
     waitingTpKey = true
     TpKeyButton.Text = "..."
-    TpKeyButton.TextColor3 = Color3.fromRGB(0, 255, 255)
+    TpKeyButton.TextColor3 = THEME_ACCENT
 end)
 
 local AutoTpFrame = Instance.new("Frame")
 AutoTpFrame.Size = UDim2.new(0.9, 0, 0, 26)
 AutoTpFrame.Position = UDim2.new(0.05, 0, 0, 214)
-AutoTpFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+AutoTpFrame.BackgroundColor3 = THEME_PANEL
 AutoTpFrame.BorderSizePixel = 0
 AutoTpFrame.Parent = Main
-Instance.new("UICorner", AutoTpFrame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", AutoTpFrame).CornerRadius = UDim.new(0, 2)
+local AutoTpFrameStroke = Instance.new("UIStroke", AutoTpFrame)
+AutoTpFrameStroke.Color = THEME_BORDER
+AutoTpFrameStroke.Thickness = 1
 
 local AutoTpLabel = Instance.new("TextLabel")
 AutoTpLabel.Size = UDim2.new(0.6, 0, 1, 0)
 AutoTpLabel.Position = UDim2.new(0, 10, 0, 0)
 AutoTpLabel.BackgroundTransparency = 1
-AutoTpLabel.Text = "Auto TP on load"
-AutoTpLabel.Font = Enum.Font.Gotham
-AutoTpLabel.TextSize = 12
-AutoTpLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
+AutoTpLabel.Text = "AUTO TP ON LOAD"
+AutoTpLabel.Font = THEME_FONT
+AutoTpLabel.TextSize = 11
+AutoTpLabel.TextColor3 = THEME_TEXT_PRIMARY
 AutoTpLabel.TextXAlignment = Enum.TextXAlignment.Left
 AutoTpLabel.Parent = AutoTpFrame
 
 local AutoTpButton = Instance.new("TextButton")
 AutoTpButton.Size = UDim2.new(0, 60, 0, 22)
 AutoTpButton.Position = UDim2.new(1, -70, 0.5, -11)
-AutoTpButton.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+AutoTpButton.BackgroundColor3 = THEME_BG
 AutoTpButton.BorderSizePixel = 0
 AutoTpButton.Text = Config.AutoTpOnLoad and "ON" or "OFF"
-AutoTpButton.Font = Enum.Font.GothamBold
-AutoTpButton.TextSize = 11
-AutoTpButton.TextColor3 = Config.AutoTpOnLoad and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+AutoTpButton.Font = THEME_FONT
+AutoTpButton.TextSize = 10
+AutoTpButton.TextColor3 = Config.AutoTpOnLoad and THEME_ACCENT or THEME_TEXT_MUTED
 AutoTpButton.AutoButtonColor = false
 AutoTpButton.Parent = AutoTpFrame
-Instance.new("UICorner", AutoTpButton).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", AutoTpButton).CornerRadius = UDim.new(0, 2)
+local AutoTpButtonStroke = Instance.new("UIStroke", AutoTpButton)
+AutoTpButtonStroke.Color = THEME_BORDER
+AutoTpButtonStroke.Thickness = 1
 
 AutoTpButton.MouseButton1Click:Connect(function()
     Config.AutoTpOnLoad = not Config.AutoTpOnLoad
     AutoTpButton.Text = Config.AutoTpOnLoad and "ON" or "OFF"
-    AutoTpButton.TextColor3 = Config.AutoTpOnLoad and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+    AutoTpButton.TextColor3 = Config.AutoTpOnLoad and THEME_ACCENT or THEME_TEXT_MUTED
     SaveConfig()
 end)
 
 local SettingsButton = Instance.new("TextButton")
 SettingsButton.Size = UDim2.new(0.4, 0, 0, 26)
 SettingsButton.Position = UDim2.new(0.05, 0, 0, 244)
-SettingsButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+SettingsButton.BackgroundColor3 = THEME_PANEL
 SettingsButton.BorderSizePixel = 0
-SettingsButton.Text = "Settings"
-SettingsButton.Font = Enum.Font.GothamBold
-SettingsButton.TextSize = 12
-SettingsButton.TextColor3 = Color3.fromRGB(190, 190, 200)
+SettingsButton.Text = "SETTINGS"
+SettingsButton.Font = THEME_FONT
+SettingsButton.TextSize = 10
+SettingsButton.TextColor3 = THEME_TEXT_PRIMARY
 SettingsButton.AutoButtonColor = false
 SettingsButton.Parent = Main
-Instance.new("UICorner", SettingsButton).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", SettingsButton).CornerRadius = UDim.new(0, 2)
+local SettingsButtonStroke = Instance.new("UIStroke", SettingsButton)
+SettingsButtonStroke.Color = THEME_BORDER
+SettingsButtonStroke.Thickness = 1
 
 local GuiDivider = Instance.new("Frame")
 GuiDivider.Size = UDim2.new(0.9, 0, 0, 1)
 GuiDivider.Position = UDim2.new(0.05, 0, 0, 276)
-GuiDivider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+GuiDivider.BackgroundColor3 = THEME_BORDER
 GuiDivider.BorderSizePixel = 0
 GuiDivider.Parent = Main
 
@@ -1761,51 +1799,51 @@ local GuiLabel = Instance.new("TextLabel")
 GuiLabel.Size = UDim2.new(0.4, 0, 0, 18)
 GuiLabel.Position = UDim2.new(0.05, 0, 0, 284)
 GuiLabel.BackgroundTransparency = 1
-GuiLabel.Text = "GUI Scale"
-GuiLabel.Font = Enum.Font.Gotham
-GuiLabel.TextSize = 12
-GuiLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
+GuiLabel.Text = "GUI SCALE"
+GuiLabel.Font = THEME_FONT
+GuiLabel.TextSize = 10
+GuiLabel.TextColor3 = THEME_TEXT_PRIMARY
 GuiLabel.TextXAlignment = Enum.TextXAlignment.Left
 GuiLabel.Parent = Main
 
 local GuiBox = Instance.new("TextBox")
 GuiBox.Size = UDim2.new(0, 55, 0, 20)
 GuiBox.Position = UDim2.new(0.95, -55, 0, 282)
-GuiBox.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+GuiBox.BackgroundColor3 = THEME_PANEL
 GuiBox.BorderSizePixel = 0
-GuiBox.Font = Enum.Font.GothamBold
-GuiBox.TextSize = 11
-GuiBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+GuiBox.Font = THEME_FONT
+GuiBox.TextSize = 10
+GuiBox.TextColor3 = THEME_TEXT_PRIMARY
 GuiBox.TextXAlignment = Enum.TextXAlignment.Center
 GuiBox.Parent = Main
-Instance.new("UICorner", GuiBox).CornerRadius = UDim.new(0, 4)
+Instance.new("UICorner", GuiBox).CornerRadius = UDim.new(0, 2)
 local GuiBoxStroke = Instance.new("UIStroke")
-GuiBoxStroke.Color = Color3.fromRGB(45, 45, 45)
+GuiBoxStroke.Color = THEME_BORDER
 GuiBoxStroke.Thickness = 1
 GuiBoxStroke.Parent = GuiBox
 
 local GuiBar = Instance.new("Frame")
 GuiBar.Size = UDim2.new(0.38, 0, 0, 6)
 GuiBar.Position = UDim2.new(0.32, 0, 0, 290)
-GuiBar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+GuiBar.BackgroundColor3 = THEME_PANEL
 GuiBar.BorderSizePixel = 0
 GuiBar.Parent = Main
-Instance.new("UICorner", GuiBar).CornerRadius = UDim.new(1, 0)
+Instance.new("UICorner", GuiBar).CornerRadius = UDim.new(0, 2)
 
 local GuiFill = Instance.new("Frame")
 GuiFill.Size = UDim2.new(0, 0, 1, 0)
-GuiFill.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+GuiFill.BackgroundColor3 = THEME_ACCENT
 GuiFill.BorderSizePixel = 0
 GuiFill.Parent = GuiBar
-Instance.new("UICorner", GuiFill).CornerRadius = UDim.new(1, 0)
+Instance.new("UICorner", GuiFill).CornerRadius = UDim.new(0, 2)
 
 local GuiKnob = Instance.new("Frame")
 GuiKnob.Size = UDim2.new(0, 10, 0, 10)
 GuiKnob.Position = UDim2.new(0, -5, 0.5, -5)
-GuiKnob.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+GuiKnob.BackgroundColor3 = THEME_TEXT_PRIMARY
 GuiKnob.BorderSizePixel = 0
 GuiKnob.Parent = GuiBar
-Instance.new("UICorner", GuiKnob).CornerRadius = UDim.new(1, 0)
+Instance.new("UICorner", GuiKnob).CornerRadius = UDim.new(0, 1)
 
 local guiDragging = false
 
@@ -1900,13 +1938,13 @@ SettingsGui.Name = "SettingsGui"
 SettingsGui.AnchorPoint = Vector2.new(0.5, 0.5)
 SettingsGui.Size = UDim2.new(0, 280, 0, 395)
 SettingsGui.Position = UDim2.new(0.5, 0, 0.5, 0)
-SettingsGui.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+SettingsGui.BackgroundColor3 = THEME_BG
 SettingsGui.BorderSizePixel = 0
 SettingsGui.Visible = false
 SettingsGui.Parent = ScreenGui
-Instance.new("UICorner", SettingsGui).CornerRadius = UDim.new(0, 12)
+Instance.new("UICorner", SettingsGui).CornerRadius = UDim.new(0, 2)
 local SettingsStroke = Instance.new("UIStroke")
-SettingsStroke.Color = Color3.fromRGB(60, 60, 60)
+SettingsStroke.Color = THEME_BORDER
 SettingsStroke.Thickness = 1
 SettingsStroke.Parent = SettingsGui
 
@@ -1914,17 +1952,17 @@ local SettingsHeader = Instance.new("TextLabel")
 SettingsHeader.Size = UDim2.new(1, -20, 0, 24)
 SettingsHeader.Position = UDim2.new(0, 10, 0, 8)
 SettingsHeader.BackgroundTransparency = 1
-SettingsHeader.Text = "TP Settings"
-SettingsHeader.Font = Enum.Font.GothamBold
-SettingsHeader.TextSize = 16
-SettingsHeader.TextColor3 = Color3.fromRGB(255, 255, 255)
+SettingsHeader.Text = "TP SETTINGS"
+SettingsHeader.Font = THEME_FONT
+SettingsHeader.TextSize = 14
+SettingsHeader.TextColor3 = THEME_TEXT_PRIMARY
 SettingsHeader.TextXAlignment = Enum.TextXAlignment.Left
 SettingsHeader.Parent = SettingsGui
 
 local SettingsDivider = Instance.new("Frame")
 SettingsDivider.Size = UDim2.new(0.9, 0, 0, 1)
 SettingsDivider.Position = UDim2.new(0.05, 0, 0, 36)
-SettingsDivider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+SettingsDivider.BackgroundColor3 = THEME_BORDER
 SettingsDivider.BorderSizePixel = 0
 SettingsDivider.Parent = SettingsGui
 
@@ -1932,49 +1970,52 @@ local function makeSliderSettings(parent, y, labelText, minVal, maxVal, getValue
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0.9, 0, 0, 32)
     frame.Position = UDim2.new(0.05, 0, 0, y)
-    frame.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+    frame.BackgroundColor3 = THEME_PANEL
     frame.BorderSizePixel = 0
     frame.Parent = parent
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 2)
+    local frameStroke = Instance.new("UIStroke", frame)
+    frameStroke.Color = THEME_BORDER
+    frameStroke.Thickness = 1
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(0.6, 0, 0, 16)
     label.Position = UDim2.new(0, 8, 0, 4)
     label.BackgroundTransparency = 1
-    label.Text = labelText
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 11
-    label.TextColor3 = Color3.fromRGB(220, 220, 230)
+    label.Text = labelText:upper()
+    label.Font = THEME_FONT
+    label.TextSize = 10
+    label.TextColor3 = THEME_TEXT_PRIMARY
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
     local valueLabel = Instance.new("TextLabel")
     valueLabel.Size = UDim2.new(0, 70, 0, 16)
     valueLabel.Position = UDim2.new(1, -78, 0, 4)
     valueLabel.BackgroundTransparency = 1
-    valueLabel.Font = Enum.Font.GothamBold
-    valueLabel.TextSize = 11
-    valueLabel.TextColor3 = Color3.fromRGB(230, 230, 240)
+    valueLabel.Font = THEME_FONT
+    valueLabel.TextSize = 10
+    valueLabel.TextColor3 = THEME_ACCENT
     valueLabel.TextXAlignment = Enum.TextXAlignment.Right
     valueLabel.Parent = frame
     local bar = Instance.new("Frame")
     bar.Size = UDim2.new(1, -16, 0, 6)
     bar.Position = UDim2.new(0, 8, 1, -12)
-    bar.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    bar.BackgroundColor3 = THEME_BG
     bar.BorderSizePixel = 0
     bar.Parent = frame
-    Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 2)
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new(0, 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+    fill.BackgroundColor3 = THEME_ACCENT
     fill.BorderSizePixel = 0
     fill.Parent = bar
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 2)
     local knob = Instance.new("Frame")
     knob.Size = UDim2.new(0, 10, 0, 10)
     knob.Position = UDim2.new(0, -5, 0.5, -5)
-    knob.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+    knob.BackgroundColor3 = THEME_TEXT_PRIMARY
     knob.BorderSizePixel = 0
     knob.Parent = bar
-    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 1)
     local dragging = false
     local function updateVisual(v, instant)
         v = math.clamp(v, minVal, maxVal)
@@ -2077,62 +2118,67 @@ makeSliderSettings(SettingsGui, 208, "TP Wait Delay", 0.1, 1.0,
 local BrainrotTpModeFrame = Instance.new("Frame")
 BrainrotTpModeFrame.Size = UDim2.new(0.9, 0, 0, 30)
 BrainrotTpModeFrame.Position = UDim2.new(0.05, 0, 0, 248)
-BrainrotTpModeFrame.BackgroundColor3 = Color3.fromRGB(16,16,20)
+BrainrotTpModeFrame.BackgroundColor3 = THEME_PANEL
 BrainrotTpModeFrame.BorderSizePixel = 0
 BrainrotTpModeFrame.Parent = SettingsGui
-Instance.new("UICorner", BrainrotTpModeFrame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", BrainrotTpModeFrame).CornerRadius = UDim.new(0, 2)
+local BrainrotTpModeFrameStroke = Instance.new("UIStroke", BrainrotTpModeFrame)
+BrainrotTpModeFrameStroke.Color = THEME_BORDER
+BrainrotTpModeFrameStroke.Thickness = 1
 
 local BrainrotTpLabel = Instance.new("TextLabel")
 BrainrotTpLabel.Size = UDim2.new(0.5, 0, 1, 0)
 BrainrotTpLabel.Position = UDim2.new(0, 8, 0, 0)
 BrainrotTpLabel.BackgroundTransparency = 1
-BrainrotTpLabel.Text = "Go To Brainrot"
-BrainrotTpLabel.Font = Enum.Font.Gotham
-BrainrotTpLabel.TextSize = 11
-BrainrotTpLabel.TextColor3 = Color3.fromRGB(220,220,230)
+BrainrotTpLabel.Text = "GO TO BRAINROT"
+BrainrotTpLabel.Font = THEME_FONT
+BrainrotTpLabel.TextSize = 10
+BrainrotTpLabel.TextColor3 = THEME_TEXT_PRIMARY
 BrainrotTpLabel.TextXAlignment = Enum.TextXAlignment.Left
 BrainrotTpLabel.Parent = BrainrotTpModeFrame
 
 local WalkBtn = Instance.new("TextButton")
 WalkBtn.Size = UDim2.new(0, 54, 0, 20)
 WalkBtn.Position = UDim2.new(1, -120, 0.5, -10)
-WalkBtn.BackgroundColor3 = Color3.fromRGB(35,35,40)
+WalkBtn.BackgroundColor3 = THEME_BG
 WalkBtn.BorderSizePixel = 0
-WalkBtn.Text = "Walk"
-WalkBtn.Font = Enum.Font.GothamBold
-WalkBtn.TextSize = 10
-WalkBtn.TextColor3 = Color3.fromRGB(180,180,190)
+WalkBtn.Text = "WALK"
+WalkBtn.Font = THEME_FONT
+WalkBtn.TextSize = 9
+WalkBtn.TextColor3 = THEME_TEXT_MUTED
 WalkBtn.AutoButtonColor = false
 WalkBtn.Parent = BrainrotTpModeFrame
-Instance.new("UICorner", WalkBtn).CornerRadius = UDim.new(0,6)
+Instance.new("UICorner", WalkBtn).CornerRadius = UDim.new(0,2)
+local WalkBtnStroke = Instance.new("UIStroke", WalkBtn)
+WalkBtnStroke.Color = THEME_BORDER
+WalkBtnStroke.Thickness = 1
 
 local VelBtn = Instance.new("TextButton")
 VelBtn.Size = UDim2.new(0, 54, 0, 20)
 VelBtn.Position = UDim2.new(1, -60, 0.5, -10)
-VelBtn.BackgroundColor3 = Color3.fromRGB(35,35,40)
+VelBtn.BackgroundColor3 = THEME_BG
 VelBtn.BorderSizePixel = 0
-VelBtn.Text = "Velocity"
-VelBtn.Font = Enum.Font.GothamBold
-VelBtn.TextSize = 10
-VelBtn.TextColor3 = Color3.fromRGB(180,180,190)
+VelBtn.Text = "VELOCITY"
+VelBtn.Font = THEME_FONT
+VelBtn.TextSize = 9
+VelBtn.TextColor3 = THEME_TEXT_MUTED
 VelBtn.AutoButtonColor = false
 VelBtn.Parent = BrainrotTpModeFrame
-Instance.new("UICorner", VelBtn).CornerRadius = UDim.new(0,6)
+Instance.new("UICorner", VelBtn).CornerRadius = UDim.new(0,2)
+local VelBtnStroke = Instance.new("UIStroke", VelBtn)
+VelBtnStroke.Color = THEME_BORDER
+VelBtnStroke.Thickness = 1
 
 local function updateBrainrotTpModeUI()
     local mode = Config.TpSettings.TpToBrainrotMode or "Velocity"
     if mode == "Velocity" then
         Config.TpSettings.TpToBrainrotMode = "Velocity"
-        VelBtn.BackgroundColor3 = Color3.fromRGB(70,70,90)
-        VelBtn.TextColor3       = Color3.fromRGB(230,230,240)
-        WalkBtn.BackgroundColor3=Color3.fromRGB(35,35,40)
-        WalkBtn.TextColor3      = Color3.fromRGB(180,180,190)
+        VelBtn.TextColor3       = THEME_ACCENT
+        WalkBtn.TextColor3      = THEME_TEXT_MUTED
     else
         Config.TpSettings.TpToBrainrotMode = "Walk"
-        WalkBtn.BackgroundColor3=Color3.fromRGB(70,70,90)
-        WalkBtn.TextColor3      = Color3.fromRGB(230,230,240)
-        VelBtn.BackgroundColor3 = Color3.fromRGB(35,35,40)
-        VelBtn.TextColor3       = Color3.fromRGB(180,180,190)
+        WalkBtn.TextColor3      = THEME_ACCENT
+        VelBtn.TextColor3       = THEME_TEXT_MUTED
     end
 end
 updateBrainrotTpModeUI()
@@ -2152,112 +2198,130 @@ end)
 local PrioritySoundFrame = Instance.new("Frame")
 PrioritySoundFrame.Size = UDim2.new(0.9, 0, 0, 30)
 PrioritySoundFrame.Position = UDim2.new(0.05, 0, 0, 282)
-PrioritySoundFrame.BackgroundColor3 = Color3.fromRGB(16,16,20)
+PrioritySoundFrame.BackgroundColor3 = THEME_PANEL
 PrioritySoundFrame.BorderSizePixel = 0
 PrioritySoundFrame.Parent = SettingsGui
-Instance.new("UICorner", PrioritySoundFrame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", PrioritySoundFrame).CornerRadius = UDim.new(0, 2)
+local PrioritySoundFrameStroke = Instance.new("UIStroke", PrioritySoundFrame)
+PrioritySoundFrameStroke.Color = THEME_BORDER
+PrioritySoundFrameStroke.Thickness = 1
 
 local PrioritySoundLabel = Instance.new("TextLabel")
 PrioritySoundLabel.Size = UDim2.new(0, 110, 1, 0)
 PrioritySoundLabel.Position = UDim2.new(0, 8, 0, 0)
 PrioritySoundLabel.BackgroundTransparency = 1
-PrioritySoundLabel.Text = "Priority Sound"
-PrioritySoundLabel.Font = Enum.Font.Gotham
-PrioritySoundLabel.TextSize = 11
-PrioritySoundLabel.TextColor3 = Color3.fromRGB(220,220,230)
+PrioritySoundLabel.Text = "PRIORITY SOUND"
+PrioritySoundLabel.Font = THEME_FONT
+PrioritySoundLabel.TextSize = 10
+PrioritySoundLabel.TextColor3 = THEME_TEXT_PRIMARY
 PrioritySoundLabel.TextXAlignment = Enum.TextXAlignment.Left
 PrioritySoundLabel.Parent = PrioritySoundFrame
 
 local PrioritySoundBtn = Instance.new("TextButton")
 PrioritySoundBtn.Size = UDim2.new(0, 60, 0, 20)
 PrioritySoundBtn.Position = UDim2.new(1, -70, 0.5, -10)
-PrioritySoundBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+PrioritySoundBtn.BackgroundColor3 = THEME_BG
 PrioritySoundBtn.BorderSizePixel = 0
 PrioritySoundBtn.Text = Config.TpSettings.PrioritySound and "ON" or "OFF"
-PrioritySoundBtn.Font = Enum.Font.GothamBold
-PrioritySoundBtn.TextSize = 10
-PrioritySoundBtn.TextColor3 = Config.TpSettings.PrioritySound and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+PrioritySoundBtn.Font = THEME_FONT
+PrioritySoundBtn.TextSize = 9
+PrioritySoundBtn.TextColor3 = Config.TpSettings.PrioritySound and THEME_ACCENT or THEME_TEXT_MUTED
 PrioritySoundBtn.AutoButtonColor = false
 PrioritySoundBtn.Parent = PrioritySoundFrame
-Instance.new("UICorner", PrioritySoundBtn).CornerRadius = UDim.new(0,6)
+Instance.new("UICorner", PrioritySoundBtn).CornerRadius = UDim.new(0,2)
+local PrioritySoundBtnStroke = Instance.new("UIStroke", PrioritySoundBtn)
+PrioritySoundBtnStroke.Color = THEME_BORDER
+PrioritySoundBtnStroke.Thickness = 1
 
 PrioritySoundBtn.MouseButton1Click:Connect(function()
     Config.TpSettings.PrioritySound = not Config.TpSettings.PrioritySound
     PrioritySoundBtn.Text = Config.TpSettings.PrioritySound and "ON" or "OFF"
-    PrioritySoundBtn.TextColor3 = Config.TpSettings.PrioritySound and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+    PrioritySoundBtn.TextColor3 = Config.TpSettings.PrioritySound and THEME_ACCENT or THEME_TEXT_MUTED
     SaveConfig()
 end)
 
 local Floor1When2Frame = Instance.new("Frame")
 Floor1When2Frame.Size = UDim2.new(0.9, 0, 0, 30)
 Floor1When2Frame.Position = UDim2.new(0.05, 0, 0, 316)
-Floor1When2Frame.BackgroundColor3 = Color3.fromRGB(16,16,20)
+Floor1When2Frame.BackgroundColor3 = THEME_PANEL
 Floor1When2Frame.BorderSizePixel = 0
 Floor1When2Frame.Parent = SettingsGui
-Instance.new("UICorner", Floor1When2Frame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", Floor1When2Frame).CornerRadius = UDim.new(0, 2)
+local Floor1When2FrameStroke = Instance.new("UIStroke", Floor1When2Frame)
+Floor1When2FrameStroke.Color = THEME_BORDER
+Floor1When2FrameStroke.Thickness = 1
 
 local Floor1When2Label = Instance.new("TextLabel")
 Floor1When2Label.Size = UDim2.new(0, 150, 1, 0)
 Floor1When2Label.Position = UDim2.new(0, 8, 0, 0)
 Floor1When2Label.BackgroundTransparency = 1
-Floor1When2Label.Text = "Tp Floor 1 when Floor 2"
-Floor1When2Label.Font = Enum.Font.Gotham
-Floor1When2Label.TextSize = 11
-Floor1When2Label.TextColor3 = Color3.fromRGB(220,220,230)
+Floor1When2Label.Text = "TP FLOOR 1 WHEN FLOOR 2"
+Floor1When2Label.Font = THEME_FONT
+Floor1When2Label.TextSize = 10
+Floor1When2Label.TextColor3 = THEME_TEXT_PRIMARY
 Floor1When2Label.TextXAlignment = Enum.TextXAlignment.Left
 Floor1When2Label.Parent = Floor1When2Frame
 
 local Floor1When2Btn = Instance.new("TextButton")
 Floor1When2Btn.Size = UDim2.new(0, 60, 0, 20)
 Floor1When2Btn.Position = UDim2.new(1, -70, 0.5, -10)
-Floor1When2Btn.BackgroundColor3 = Color3.fromRGB(35,35,40)
+Floor1When2Btn.BackgroundColor3 = THEME_BG
 Floor1When2Btn.BorderSizePixel = 0
 Floor1When2Btn.Text = Config.TpSettings.TpFloor1WhenFloor2 and "ON" or "OFF"
-Floor1When2Btn.Font = Enum.Font.GothamBold
-Floor1When2Btn.TextSize = 10
-Floor1When2Btn.TextColor3 = Config.TpSettings.TpFloor1WhenFloor2 and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+Floor1When2Btn.Font = THEME_FONT
+Floor1When2Btn.TextSize = 9
+Floor1When2Btn.TextColor3 = Config.TpSettings.TpFloor1WhenFloor2 and THEME_ACCENT or THEME_TEXT_MUTED
 Floor1When2Btn.AutoButtonColor = false
 Floor1When2Btn.Parent = Floor1When2Frame
-Instance.new("UICorner", Floor1When2Btn).CornerRadius = UDim.new(0,6)
+Instance.new("UICorner", Floor1When2Btn).CornerRadius = UDim.new(0,2)
+local Floor1When2BtnStroke = Instance.new("UIStroke", Floor1When2Btn)
+Floor1When2BtnStroke.Color = THEME_BORDER
+Floor1When2BtnStroke.Thickness = 1
 
 Floor1When2Btn.MouseButton1Click:Connect(function()
     Config.TpSettings.TpFloor1WhenFloor2 = not Config.TpSettings.TpFloor1WhenFloor2
     Floor1When2Btn.Text = Config.TpSettings.TpFloor1WhenFloor2 and "ON" or "OFF"
-    Floor1When2Btn.TextColor3 = Config.TpSettings.TpFloor1WhenFloor2 and Color3.fromRGB(0,255,120) or Color3.fromRGB(200,200,210)
+    Floor1When2Btn.TextColor3 = Config.TpSettings.TpFloor1WhenFloor2 and THEME_ACCENT or THEME_TEXT_MUTED
     SaveConfig()
 end)
 
 local SoundIdRow = Instance.new("Frame")
 SoundIdRow.Size = UDim2.new(0.9, 0, 0, 30)
 SoundIdRow.Position = UDim2.new(0.05, 0, 0, 350)
-SoundIdRow.BackgroundColor3 = Color3.fromRGB(16,16,20)
+SoundIdRow.BackgroundColor3 = THEME_PANEL
 SoundIdRow.BorderSizePixel = 0
 SoundIdRow.Parent = SettingsGui
-Instance.new("UICorner", SoundIdRow).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", SoundIdRow).CornerRadius = UDim.new(0, 2)
+local SoundIdRowStroke = Instance.new("UIStroke", SoundIdRow)
+SoundIdRowStroke.Color = THEME_BORDER
+SoundIdRowStroke.Thickness = 1
 
 local SoundIdLabel = Instance.new("TextLabel")
 SoundIdLabel.Size = UDim2.new(0.5, 0, 1, 0)
 SoundIdLabel.Position = UDim2.new(0, 8, 0, 0)
 SoundIdLabel.BackgroundTransparency = 1
-SoundIdLabel.Text = "Sound ID"
-SoundIdLabel.Font = Enum.Font.Gotham
-SoundIdLabel.TextSize = 11
-SoundIdLabel.TextColor3 = Color3.fromRGB(220,220,230)
+SoundIdLabel.Text = "SOUND ID"
+SoundIdLabel.Font = THEME_FONT
+SoundIdLabel.TextSize = 10
+SoundIdLabel.TextColor3 = THEME_TEXT_PRIMARY
 SoundIdLabel.TextXAlignment = Enum.TextXAlignment.Left
 SoundIdLabel.Parent = SoundIdRow
 
 local SoundIdBox = Instance.new("TextBox")
 SoundIdBox.Size = UDim2.new(0.45, 0, 0, 20)
 SoundIdBox.Position = UDim2.new(1, -120, 0.5, -10)
-SoundIdBox.BackgroundColor3 = Color3.fromRGB(25,25,30)
+SoundIdBox.BackgroundColor3 = THEME_BG
 SoundIdBox.BorderSizePixel = 0
 SoundIdBox.Text = Config.TpSettings.PrioritySoundID or "94302001673909"
-SoundIdBox.Font = Enum.Font.Gotham
-SoundIdBox.TextSize = 10
-SoundIdBox.TextColor3 = Color3.fromRGB(230,230,230)
+SoundIdBox.Font = THEME_FONT
+SoundIdBox.TextSize = 9
+SoundIdBox.TextColor3 = THEME_TEXT_PRIMARY
 SoundIdBox.ClearTextOnFocus = false
 SoundIdBox.Parent = SoundIdRow
-Instance.new("UICorner", SoundIdBox).CornerRadius = UDim.new(0,6)
+Instance.new("UICorner", SoundIdBox).CornerRadius = UDim.new(0,2)
+local SoundIdBoxStroke = Instance.new("UIStroke", SoundIdBox)
+SoundIdBoxStroke.Color = THEME_BORDER
+SoundIdBoxStroke.Thickness = 1
 
 SoundIdBox.FocusLost:Connect(function()
     local txt = SoundIdBox.Text:gsub("%s","")
@@ -2310,11 +2374,11 @@ UserInputService.InputBegan:Connect(function(input, gpe)
             Config.TpSettings.TpKey = name
             TpKeyCode = input.KeyCode
             TpKeyButton.Text = name
-            TpKeyButton.TextColor3 = Color3.fromRGB(200, 200, 210)
+            TpKeyButton.TextColor3 = THEME_TEXT_PRIMARY
             SaveConfig()
         else
             TpKeyButton.Text = Config.TpSettings.TpKey or "T"
-            TpKeyButton.TextColor3 = Color3.fromRGB(200, 200, 210)
+            TpKeyButton.TextColor3 = THEME_TEXT_PRIMARY
         end
         return
     end
