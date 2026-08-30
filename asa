@@ -1,3 +1,7 @@
+-- ============================================
+-- SMKTHub TP Panel
+-- ============================================
+
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Players             = game:GetService("Players")
@@ -14,10 +18,10 @@ local LP        = Players.LocalPlayer
 local PlayerGui = LP:WaitForChild("PlayerGui")
 
 local _syncJobId = tostring(game.JobId)
-if _G.__SABCOM_SYNC_JOB ~= _syncJobId then
-    _G.__SABCOM_SYNC_JOB = _syncJobId
-    _G.SabcomPreloadedSynchronizer = nil
-    _G.SabcomSynchronizerReady = nil
+if _G.__SMKT_SYNC_JOB ~= _syncJobId then
+    _G.__SMKT_SYNC_JOB = _syncJobId
+    _G.SMKTPreloadedSynchronizer = nil
+    _G.SMKTSynchronizerReady = nil
 end
 
 local function _tryRequireSynchronizer()
@@ -31,54 +35,61 @@ local function _tryRequireSynchronizer()
     return ok and mod or nil
 end
 
-if not _G.SabcomPreloadedSynchronizer then
+if not _G.SMKTPreloadedSynchronizer then
     local syncMod = _tryRequireSynchronizer()
     if syncMod then
-        _G.SabcomPreloadedSynchronizer = syncMod
-        _G.SabcomSynchronizerReady = true
+        _G.SMKTPreloadedSynchronizer = syncMod
+        _G.SMKTSynchronizerReady = true
     end
 end
 
+-- ============================================
+-- GLOBAL DEFAULTS (SMKTHub Core)
+-- ============================================
 _G.TPVelocity             = _G.TPVelocity or 400
-_G.SabcomClimb            = _G.SabcomClimb or 160
-_G.SabcomClimbSafe        = _G.SabcomClimbSafe or 250
-_G.SabcomClimbFull        = false
-_G.SabcomGoSpeed          = _G.SabcomGoSpeed or 200
-_G.SabcomCloseSpeed       = _G.SabcomCloseSpeed or 80
+_G.SMKTClimb              = _G.SMKTClimb or 160
+_G.SMKTClimbSafe          = _G.SMKTClimbSafe or 250
+_G.SMKTClimbFull          = false
+_G.SMKTGoSpeed            = _G.SMKTGoSpeed or 200
+_G.SMKTCloseSpeed         = _G.SMKTCloseSpeed or 80
 _G.LandingDelay           = 0.35
-_G.SabcomPostCloneDelay   = 0.1
-_G.SabcomBoostWindow      = 20
-_G.SabcomSideTPRange      = 100
-_G.SabcomPreferFrontOnRow = true
-_G.SabcomDirect           = true
-_G.SabcomJumpOnce         = true
-_G.SabcomStallSec         = 0.6
-_G.SabcomRepushAt         = 0.9
-_G.SabcomPathCell         = 4
-_G.SabcomPathRadius       = 2.5
-_G.SabcomPathHeight       = 5
-_G.SabcomPathPad          = 40
-_G.SabcomRowBoxX          = 26
-_G.SabcomRowBoxZ          = 30
-_G.SabcomRowLane          = 30
-_G.SabcomVoidY            = -50
-_G.SabcomCloneBackoff     = 0.5
-_G.SabcomFrontRunIn       = 130
-_G.SabcomSettleFrames     = 4
-_G.SabcomSettleMaxMs      = 250
-_G.SabcomPingThresh       = 170
-_G.SabcomHighPingSpeed    = 400
-_G.SabcomGrappleWaitMs    = 200
-_G.SabcomGrappleSettleMs  = 60
-_G.SabcomCarpetWaitMs     = 200
-_G.SabcomCarpetRelance    = true
-_G.SabcomStrictSweep      = true
-_G.SabcomNoAnim           = true
+_G.SMKTPostCloneDelay     = 0.1
+_G.SMKTBoostWindow        = 20
+_G.SMKTSideTPRange        = 100
+_G.SMKTPreferFrontOnRow   = true
+_G.SMKTDirect             = true
+_G.SMKTJumpOnce           = true
+_G.SMKTStallSec           = 0.6
+_G.SMKTRepushAt           = 0.9
+_G.SMKTPathCell           = 4
+_G.SMKTPathRadius         = 2.5
+_G.SMKTPathHeight         = 5
+_G.SMKTPathPad            = 40
+_G.SMKTRowBoxX            = 26
+_G.SMKTRowBoxZ            = 30
+_G.SMKTRowLane            = 30
+_G.SMKTVoidY              = -50
+_G.SMKTCloneBackoff       = 0.5
+_G.SMKTFrontRunIn         = 130
+_G.SMKTSettleFrames       = 4
+_G.SMKTSettleMaxMs        = 250
+_G.SMKTPingThresh         = 170
+_G.SMKTHighPingSpeed      = 400
+_G.SMKTGrappleWaitMs      = 200
+_G.SMKTGrappleSettleMs    = 60
+_G.SMKTCarpetWaitMs       = 200
+_G.SMKTCarpetRelance      = true
+_G.SMKTStrictSweep        = true
+_G.SMKTNoAnim             = true
 _G.ApproachFloor2FromFloor1 = false
 _G.AutoRecoverLagback     = true
-_G.SabcomBrainrotSpeed    = _G.SabcomBrainrotSpeed or 200
+_G.SMKTBrainrotSpeed      = _G.SMKTBrainrotSpeed or 200
 
--- Sabcom exact bases
+-- Jump-Refresh settings (during pathfinding)
+_G.SMKTJumpRefreshEnabled  = true
+_G.SMKTJumpRefreshInterval = 1.0
+
+-- Exact base coordinates
 local BASES_LOW = {
     [1]=Vector3.new(-476.52,-2,220.94), [2]=Vector3.new(-476.52,-2,113.77),
     [3]=Vector3.new(-476.52,-2,6.18),   [4]=Vector3.new(-476.52,-2,-101.07),
@@ -92,7 +103,8 @@ local BASES_HIGH = {
     [7]=Vector3.new(-339.48,18,6.25),   [8]=Vector3.new(-339.48,18,-99.73),
 }
 
-local SAVE_KEY = "ENZO_TP_PANEL_" .. LP.UserId
+local SAVE_KEY = "SMKTHub_TP_Panel_" .. LP.UserId
+local CONFIG_VERSION = 2
 
 local THEME_BG           = Color3.fromRGB(12, 12, 14)
 local THEME_PANEL        = Color3.fromRGB(18, 18, 22)
@@ -120,11 +132,7 @@ local CARPET_NAMES = {
 
 local Config = {
     TpSettings = {
-        Tool               = "Grapple Hook",
-        Speed              = 2,
         TpKey              = "T",
-        CloneKey           = "V",
-        TpOnLoad           = false,
         TpDelay            = 0,
         LandingDelay       = 0.35,
         PostCloneDelay     = 0.1,
@@ -134,10 +142,8 @@ local Config = {
         TpToBrainrotMode   = "Velocity",
         WalkToBrainrotSpd  = 190,
         CloneDelay         = 0.03,
-        TpWaitDelay        = 0.3,
         TpV2Speed          = 400,
         TpGrappleSpeed     = 400,
-        -- NEW: only these 2 are adjustable
         CloseSpeed         = 80,
         ClimbSpeed         = 160,
     },
@@ -147,57 +153,118 @@ local Config = {
     GuiPos       = nil,
 }
 
-local function SaveConfig()
-    pcall(function()
-        if writefile then
-            local data = {
-                TpSettings   = Config.TpSettings,
-                AutoTpOnLoad = Config.AutoTpOnLoad,
-                GuiScale     = Config.GuiScale,
-                ToolChoice   = Config.ToolChoice,
-                GuiPos       = Config.GuiPos and {
-                    ScaleX  = Config.GuiPos.X.Scale,
-                    OffsetX = Config.GuiPos.X.Offset,
-                    ScaleY  = Config.GuiPos.Y.Scale,
-                    OffsetY = Config.GuiPos.Y.Offset,
-                } or nil,
-            }
-            writefile(SAVE_KEY .. ".json", HttpService:JSONEncode(data))
+-- keep a clean type-reference for validation on load
+local _defaultTpSettings = {}
+for k, v in pairs(Config.TpSettings) do _defaultTpSettings[k] = v end
+
+-- ============================================
+-- IMPROVED SAVE SYSTEM (debounced + atomic + validated)
+-- ============================================
+local function _buildSaveData()
+    return {
+        Version      = CONFIG_VERSION,
+        TpSettings   = Config.TpSettings,
+        AutoTpOnLoad = Config.AutoTpOnLoad,
+        GuiScale     = Config.GuiScale,
+        ToolChoice   = Config.ToolChoice,
+        GuiPos       = Config.GuiPos and {
+            ScaleX  = Config.GuiPos.X.Scale,
+            OffsetX = Config.GuiPos.X.Offset,
+            ScaleY  = Config.GuiPos.Y.Scale,
+            OffsetY = Config.GuiPos.Y.Offset,
+        } or nil,
+    }
+end
+
+local function _atomicWrite(path, content)
+    if not writefile then return false end
+    local tmpPath = path .. ".tmp"
+    local ok1 = pcall(writefile, tmpPath, content)
+    if not ok1 then return false end
+    if readfile then
+        local ok2, verify = pcall(readfile, tmpPath)
+        if not ok2 or verify ~= content then
+            pcall(function() if delfile then delfile(tmpPath) end end)
+            return false
         end
+    end
+    local ok3 = pcall(writefile, path, content)
+    pcall(function() if delfile then delfile(tmpPath) end end)
+    return ok3
+end
+
+local function SaveConfigNow()
+    if not writefile then return end
+    local data = _buildSaveData()
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(data) end)
+    if not ok or type(encoded) ~= "string" then return end
+    _atomicWrite(SAVE_KEY .. ".json", encoded)
+end
+
+local _saveQueued  = false
+local _saveDirty   = false
+local function SaveConfig()
+    if not writefile then return end
+    _saveDirty = true
+    if _saveQueued then return end
+    _saveQueued = true
+    task.delay(0.35, function()
+        _saveQueued = false
+        if _saveDirty then SaveConfigNow() end
     end)
 end
 
 local function LoadConfig()
-    pcall(function()
-        if readfile and isfile and isfile(SAVE_KEY .. ".json") then
-            local data = HttpService:JSONDecode(readfile(SAVE_KEY .. ".json"))
-            if data.TpSettings then
-                for k,v in pairs(data.TpSettings) do Config.TpSettings[k] = v end
-            end
-            if data.AutoTpOnLoad ~= nil then Config.AutoTpOnLoad = data.AutoTpOnLoad end
-            if data.GuiScale    ~= nil then Config.GuiScale    = data.GuiScale end
-            if data.ToolChoice  ~= nil then Config.ToolChoice  = data.ToolChoice end
-            if data.GuiPos and data.GuiPos.ScaleX then
-                Config.GuiPos = UDim2.new(
-                    data.GuiPos.ScaleX, data.GuiPos.OffsetX,
-                    data.GuiPos.ScaleY, data.GuiPos.OffsetY
-                )
+    if not (readfile and isfile) then return end
+    local ok, exists = pcall(isfile, SAVE_KEY .. ".json")
+    if not ok or not exists then return end
+
+    local okRead, raw = pcall(readfile, SAVE_KEY .. ".json")
+    if not okRead or type(raw) ~= "string" or #raw == 0 then return end
+
+    local okDecode, data = pcall(function() return HttpService:JSONDecode(raw) end)
+    if not okDecode or type(data) ~= "table" then
+        warn("[SMKTHub] Config corrupted, resetting to defaults.")
+        return
+    end
+
+    -- type-validated merge for TpSettings
+    if type(data.TpSettings) == "table" then
+        for k, def in pairs(_defaultTpSettings) do
+            local v = data.TpSettings[k]
+            if v ~= nil and type(v) == type(def) then
+                Config.TpSettings[k] = v
             end
         end
-    end)
+    end
+
+    if type(data.AutoTpOnLoad) == "boolean" then Config.AutoTpOnLoad = data.AutoTpOnLoad end
+    if type(data.GuiScale) == "number" then
+        Config.GuiScale = math.clamp(data.GuiScale, 1, 100)
+    end
+    if type(data.ToolChoice) == "string" and REAL_TOOL_NAMES[data.ToolChoice] then
+        Config.ToolChoice = data.ToolChoice
+    end
+    if type(data.GuiPos) == "table" and type(data.GuiPos.ScaleX) == "number" then
+        local gp = data.GuiPos
+        Config.GuiPos = UDim2.new(gp.ScaleX or 1, gp.OffsetX or 0, gp.ScaleY or 0, gp.OffsetY or 0)
+    end
 end
 
 LoadConfig()
 
 _G.TPVelocity           = Config.TpSettings.TpV2Speed or 400
 _G.LandingDelay         = Config.TpSettings.LandingDelay or 0.35
-_G.SabcomPostCloneDelay = Config.TpSettings.PostCloneDelay or 0.1
-_G.SabcomGoSpeed        = Config.TpSettings.WalkToBrainrotSpd or 200
-_G.SabcomBrainrotSpeed  = _G.SabcomGoSpeed
-_G.SabcomCloseSpeed     = Config.TpSettings.CloseSpeed or 80
-_G.SabcomClimb          = Config.TpSettings.ClimbSpeed or 160
-_G.SabcomClimbSafe      = Config.TpSettings.ClimbSpeed or 160
+_G.SMKTPostCloneDelay   = Config.TpSettings.PostCloneDelay or 0.1
+_G.SMKTGoSpeed          = Config.TpSettings.WalkToBrainrotSpd or 200
+_G.SMKTBrainrotSpeed    = _G.SMKTGoSpeed
+_G.SMKTCloseSpeed       = Config.TpSettings.CloseSpeed or 80
+_G.SMKTClimb            = Config.TpSettings.ClimbSpeed or 160
+_G.SMKTClimbSafe        = Config.TpSettings.ClimbSpeed or 160
 
+-- ============================================
+-- HELPERS
+-- ============================================
 local function isAlive()
     local char = LP.Character
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
@@ -266,7 +333,7 @@ local function _muteAndStopPull(tool, hrp)
     if hrp then
         local fp = hrp:FindFirstChild("FlightPower")
         if fp then fp:Destroy() end
-        if not _G.SabcomIsTeleporting then
+        if not _G.SMKTIsTeleporting then
             pcall(function()
                 hrp.AssemblyLinearVelocity  = Vector3.zero
                 hrp.AssemblyAngularVelocity = Vector3.zero
@@ -287,16 +354,16 @@ local function _holdNoPull(tool, hrp, seconds)
     end)
 end
 
-_G.__SabcomGrappleDisparar = function(tool, pos, alvo, char, RSv)
-    local refs = (getgenv and getgenv().__SabcomPMRefs) or _G.__SabcomPMRefs
+_G.__SMKTGrappleFire = function(tool, pos, alvo, char, RSv)
+    local refs = (getgenv and getgenv().__SMKTPMRefs) or _G.__SMKTPMRefs
     if not refs then
         refs = {}
         pcall(function()
             local mouse = require((RSv or ReplicatedStorage).Packages.PlayerMouse)
             if type(mouse) == "table" then refs[1] = mouse end
         end)
-        if getgenv then getgenv().__SabcomPMRefs = refs end
-        _G.__SabcomPMRefs = refs
+        if getgenv then getgenv().__SMKTPMRefs = refs end
+        _G.__SMKTPMRefs = refs
     end
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     _muteAndStopPull(tool, hrp)
@@ -327,7 +394,7 @@ _G.__SabcomGrappleDisparar = function(tool, pos, alvo, char, RSv)
     return ok
 end
 
-_G.SabcomFireGrapple2 = function(value, exato)
+_G.SMKTFireGrapple = function(value, exato)
     local eu   = Players.LocalPlayer
     local char = eu and eu.Character
     local hrp  = char and char:FindFirstChild("HumanoidRootPart")
@@ -366,7 +433,7 @@ _G.SabcomFireGrapple2 = function(value, exato)
             end
         end
         if not alvo then return false end
-        return _G.__SabcomGrappleDisparar(tool, pos, alvo, char, ReplicatedStorage)
+        return _G.__SMKTGrappleFire(tool, pos, alvo, char, ReplicatedStorage)
     end
     local destino
     if typeof(value) == "Vector3" then destino = value
@@ -408,7 +475,7 @@ _G.SabcomFireGrapple2 = function(value, exato)
         end
     end
     if not pos or not alvo then return false end
-    return _G.__SabcomGrappleDisparar(tool, pos, alvo, char, ReplicatedStorage)
+    return _G.__SMKTGrappleFire(tool, pos, alvo, char, ReplicatedStorage)
 end
 
 local function _pingMs()
@@ -420,15 +487,15 @@ end
 
 local function _pingAdjustSpeed(baseSpeed)
     local ping   = _pingMs()
-    local thresh = tonumber(_G.SabcomPingThresh) or 170
+    local thresh = tonumber(_G.SMKTPingThresh) or 170
     if ping > thresh then
-        return math.min(baseSpeed, tonumber(_G.SabcomHighPingSpeed) or 400)
+        return math.min(baseSpeed, tonumber(_G.SMKTHighPingSpeed) or 400)
     end
     return baseSpeed
 end
 
 local function _clearWide(from, to, radius)
-    radius = radius or (tonumber(_G.SabcomPathRadius) or 2.5)
+    radius = radius or (tonumber(_G.SMKTPathRadius) or 2.5)
     local dir  = to - from
     local dist = dir.Magnitude
     if dist < 0.1 then return true end
@@ -463,9 +530,9 @@ local function _clearWide(from, to, radius)
 end
 
 local function voxelRoute(startPos, endPos, up)
-    local cell   = tonumber(_G.SabcomPathCell)   or 4
-    local radius = tonumber(_G.SabcomPathRadius) or 2.5
-    local height = tonumber(_G.SabcomPathHeight) or 5
+    local cell   = tonumber(_G.SMKTPathCell)   or 4
+    local radius = tonumber(_G.SMKTPathRadius) or 2.5
+    local height = tonumber(_G.SMKTPathHeight) or 5
     up = up or 0
     local function snap(p)
         return Vector3.new(
@@ -584,34 +651,43 @@ local function voxelRoute(startPos, endPos, up)
 end
 
 local function computeRoute(startPos, targetPos, facingDir, upHint)
-    if _G.SabcomDirect ~= false and _clearWide(startPos, targetPos, tonumber(_G.SabcomPathRadius) or 2.5) then
+    if _G.SMKTDirect ~= false and _clearWide(startPos, targetPos, tonumber(_G.SMKTPathRadius) or 2.5) then
         return { startPos, targetPos }
     end
     return voxelRoute(startPos, targetPos, upHint)
 end
 
 local function _climbCap(hrp, targetY)
-    if _G.SabcomClimbFull == true then return tonumber(_G.SabcomClimb) or 160 end
+    if _G.SMKTClimbFull == true then return tonumber(_G.SMKTClimb) or 160 end
     local diff = targetY - hrp.Position.Y
     if diff > 2 then
-        local safe = tonumber(_G.SabcomClimbSafe) or 250
-        local full = tonumber(_G.SabcomClimb) or 160
+        local safe = tonumber(_G.SMKTClimbSafe) or 250
+        local full = tonumber(_G.SMKTClimb) or 160
         return diff > 8 and full or safe
     end
-    return tonumber(_G.SabcomClimb) or 160
+    return tonumber(_G.SMKTClimb) or 160
 end
 
-local function sabcomVelMove(hrp, waypoints, speedOverride)
+-- ============================================
+-- MOVEMENT WITH JUMP-REFRESH
+-- ============================================
+local function smktVelMove(hrp, waypoints, speedOverride)
     if not hrp or not hrp.Parent or #waypoints == 0 then return function() end end
     local done      = false
     local wpIdx     = 1
     local conn
     local ARRIVE    = 3.5
-    local stallSec  = tonumber(_G.SabcomStallSec) or 0.6
-    local repushAt  = tonumber(_G.SabcomRepushAt) or 0.9
+    local stallSec  = tonumber(_G.SMKTStallSec) or 0.6
+    local repushAt  = tonumber(_G.SMKTRepushAt) or 0.9
     local lastDist  = math.huge
     local stallT    = os.clock()
     local baseSpeed = _pingAdjustSpeed(speedOverride or tonumber(_G.TPVelocity) or 400)
+
+    -- jump-refresh state
+    local jumpEnabled  = _G.SMKTJumpRefreshEnabled ~= false
+    local jumpInterval = tonumber(_G.SMKTJumpRefreshInterval) or 1.0
+    local lastJumpT    = os.clock()
+
     equipCarpet()
     local function hardStop()
         if done then return end
@@ -622,6 +698,7 @@ local function sabcomVelMove(hrp, waypoints, speedOverride)
     conn = RunService.Heartbeat:Connect(function()
         if done then return end
         if not isAlive() then _G.TPStatus = "player_died_aborted"; hardStop(); return end
+        local hum = hrp.Parent and hrp.Parent:FindFirstChildOfClass("Humanoid")
         local target = waypoints[wpIdx]
         local diff   = target - hrp.Position
         local mag    = diff.Magnitude
@@ -642,10 +719,27 @@ local function sabcomVelMove(hrp, waypoints, speedOverride)
             local spd = baseSpeed
             if diff.Y > 2 then spd = math.min(spd, _climbCap(hrp, target.Y) + math.abs(diff.Y)*8) end
             if wpIdx == #waypoints and mag < 12 then
-                spd = math.max(tonumber(_G.SabcomCloseSpeed) or 80, spd * (mag/12))
+                spd = math.max(tonumber(_G.SMKTCloseSpeed) or 80, spd * (mag/12))
             end
-            hrp.AssemblyLinearVelocity = dir * spd
-            stabilize(hrp.Parent:FindFirstChildOfClass("Humanoid"))
+
+            -- jump refresh: quick hop every N seconds to refresh position/state
+            local doJumpNow = false
+            if jumpEnabled and (os.clock() - lastJumpT) >= jumpInterval then
+                lastJumpT = os.clock()
+                doJumpNow = true
+            end
+
+            if doJumpNow then
+                local jumpPower = (hum and hum.JumpPower and hum.JumpPower > 0) and hum.JumpPower or 50
+                hrp.AssemblyLinearVelocity = Vector3.new(dir.X * spd, jumpPower, dir.Z * spd)
+                if hum then
+                    pcall(function() hum:ChangeState(Enum.HumanoidStateType.Jumping) end)
+                end
+            else
+                hrp.AssemblyLinearVelocity = dir * spd
+            end
+
+            stabilize(hum)
         end
     end)
     return hardStop
@@ -654,7 +748,7 @@ end
 local function getPrioritySelected()
     local PS = getgenv and getgenv().PrioritySystem
     if PS and PS.SelectedData then return PS.SelectedData end
-    local tgt = _G.SabcomStealTarget
+    local tgt = _G.SMKTStealTarget or _G.SabcomStealTarget
     if type(tgt) == "table" then return tgt end
     return nil
 end
@@ -709,13 +803,13 @@ local function getBaseEntry(idx, isUpper, playerZ)
 end
 
 local ThirdFloorPlatform = Instance.new("Part")
-ThirdFloorPlatform.Name="ENZO_TP_ThirdFloor_Floor"; ThirdFloorPlatform.Size=Vector3.new(8,1,8)
+ThirdFloorPlatform.Name="SMKTHub_ThirdFloor_Floor"; ThirdFloorPlatform.Size=Vector3.new(8,1,8)
 ThirdFloorPlatform.Anchored=true; ThirdFloorPlatform.CanCollide=false
 ThirdFloorPlatform.Transparency=1; ThirdFloorPlatform.CFrame=CFrame.new(0,-1000,0)
 ThirdFloorPlatform.Parent=workspace
 
 local SecondFloorPlatform = Instance.new("Part")
-SecondFloorPlatform.Name="ENZO_TP_SecondFloor_Floor"; SecondFloorPlatform.Size=Vector3.new(8,1,8)
+SecondFloorPlatform.Name="SMKTHub_SecondFloor_Floor"; SecondFloorPlatform.Size=Vector3.new(8,1,8)
 SecondFloorPlatform.Anchored=true; SecondFloorPlatform.CanCollide=false
 SecondFloorPlatform.Transparency=1; SecondFloorPlatform.CFrame=CFrame.new(0,-1000,0)
 SecondFloorPlatform.Parent=workspace
@@ -820,9 +914,8 @@ end
 local function swapWithClone()
     local remote = getQuantumTeleportRemote()
     if remote then
-        local ok, err = pcall(function() remote:FireServer() end)
+        local ok = pcall(function() remote:FireServer() end)
         if ok then return true end
-        warn("[CLONE] Remote fehlgeschlagen:", err)
     end
     local btn = PlayerGui:FindFirstChild("ToolsFrames")
         and PlayerGui.ToolsFrames:FindFirstChild("QuantumCloner")
@@ -857,7 +950,6 @@ local function swapWithClone()
         end)
         return true
     end
-    warn("[CLONE] Button nicht gefunden, versuche manuelles Teleportieren")
     return manualCloneTeleport()
 end
 
@@ -866,17 +958,10 @@ local function doClone()
     _G._UnifiedIsCloning = true
     local success = false
     pcall(function()
-        if not placeCloneOnly() then
-            warn("[CLONE] placeCloneOnly fehlgeschlagen")
-            return
-        end
+        if not placeCloneOnly() then return end
         task.wait(0.05)
-        if swapWithClone() then
-            success = true
-        else
-            warn("[CLONE] swapWithClone fehlgeschlagen, versuche manuell")
-            success = manualCloneTeleport()
-        end
+        if swapWithClone() then success = true
+        else success = manualCloneTeleport() end
     end)
     _G._UnifiedIsCloning = false
     return success
@@ -927,7 +1012,7 @@ local function goToBrainrot(brainPos)
         end
     elseif mode == "Walk" then
         local route    = computeRoute(hrp.Position, targetPos)
-        local stopMove = sabcomVelMove(hrp, route, _pingAdjustSpeed(tonumber(_G.SabcomGoSpeed) or 200))
+        local stopMove = smktVelMove(hrp, route, _pingAdjustSpeed(tonumber(_G.SMKTGoSpeed) or 200))
         local t0 = tick()
         while tick()-t0 < 8 do
             if not isAlive() then break end
@@ -966,13 +1051,13 @@ _G.TPStatus = "idle"
 local function doVelocityTP()
     if isTeleporting then return end
     isTeleporting = true
-    _G.SabcomIsTeleporting = true
+    _G.SMKTIsTeleporting = true
     _G.TPStatus = "start"
 
     local function abort(reason)
         _G.TPStatus = reason or "aborted"
         isTeleporting = false
-        _G.SabcomIsTeleporting = false
+        _G.SMKTIsTeleporting = false
     end
     local function checkAbort()
         if not isAlive() then abort("player_died_aborted"); return true end
@@ -1010,9 +1095,9 @@ local function doVelocityTP()
     if checkAbort() then return end
 
     if useGrapple then
-        _G.SabcomIsTeleporting = true
-        _G.SabcomFireGrapple2(destPos)
-        task.wait((tonumber(_G.SabcomGrappleWaitMs) or 200)/1000)
+        _G.SMKTIsTeleporting = true
+        _G.SMKTFireGrapple(destPos)
+        task.wait((tonumber(_G.SMKTGrappleWaitMs) or 200)/1000)
     end
     equipCarpet()
 
@@ -1020,7 +1105,7 @@ local function doVelocityTP()
     _G.TPStatus = "traveling_to_base"
 
     local route    = computeRoute(hrp.Position, destPos, facingDir)
-    local stopMove = sabcomVelMove(hrp, route, baseSpeed)
+    local stopMove = smktVelMove(hrp, route, baseSpeed)
     local t0       = tick()
     while tick()-t0 < 10 do
         if checkAbort() then stopMove(); return end
@@ -1070,7 +1155,7 @@ local function doVelocityTP()
             equipCarpet()
         end
         table.insert(holdConns, RunService.Heartbeat:Connect(holdStill))
-        task.wait(math.max(0.1, tonumber(_G.SabcomPostCloneDelay) or 0.1))
+        task.wait(math.max(0.1, tonumber(_G.SMKTPostCloneDelay) or 0.1))
         for _, c in ipairs(holdConns) do c:Disconnect() end
         if checkAbort() then return end
         char = LP.Character
@@ -1090,20 +1175,20 @@ local function doVelocityTP()
     end
 
     isTeleporting = false
-    _G.SabcomIsTeleporting = false
+    _G.SMKTIsTeleporting = false
 end
 
-_G.VanishStartSideTP = doVelocityTP
+_G.SMKTStartTeleport = doVelocityTP
 
 -- ========================
 -- GUI
 -- ========================
 local isInteractingWithSlider = false
-local oldGui = PlayerGui:FindFirstChild("ENZO_TP_PANEL")
+local oldGui = PlayerGui:FindFirstChild("SMKTHub_TP_Panel")
 if oldGui then oldGui:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name="ENZO_TP_PANEL"; ScreenGui.ResetOnSpawn=false
+ScreenGui.Name="SMKTHub_TP_Panel"; ScreenGui.ResetOnSpawn=false
 ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; ScreenGui.Parent=PlayerGui
 
 local GlobalUIScale = Instance.new("UIScale")
@@ -1132,7 +1217,7 @@ HeaderTitle.Parent=Header
 
 local HeaderSub=Instance.new("TextLabel"); HeaderSub.Size=UDim2.new(1,0,0,18)
 HeaderSub.Position=UDim2.new(0,0,0,26); HeaderSub.BackgroundTransparency=1
-HeaderSub.Text="BRAINROT TELEPORT"; HeaderSub.Font=THEME_FONT; HeaderSub.TextSize=10
+HeaderSub.Text="SMKTHUB TELEPORT"; HeaderSub.Font=THEME_FONT; HeaderSub.TextSize=10
 HeaderSub.TextColor3=THEME_TEXT_MUTED; HeaderSub.TextXAlignment=Enum.TextXAlignment.Center
 HeaderSub.Parent=Header
 
@@ -1273,7 +1358,6 @@ AutoTpButton.MouseButton1Click:Connect(function()
     SaveConfig()
 end)
 
--- Live coords bar (NEW)
 local CoordsBar=Instance.new("Frame"); CoordsBar.Size=UDim2.new(0.9,0,0,20)
 CoordsBar.Position=UDim2.new(0.05,0,0,244); CoordsBar.BackgroundColor3=THEME_PANEL
 CoordsBar.BorderSizePixel=0; CoordsBar.Parent=Main
@@ -1301,7 +1385,6 @@ task.spawn(function()
     end
 end)
 
--- Base info bar (NEW)
 local BaseBar=Instance.new("Frame"); BaseBar.Size=UDim2.new(0.9,0,0,20)
 BaseBar.Position=UDim2.new(0.05,0,0,268); BaseBar.BackgroundColor3=THEME_PANEL
 BaseBar.BorderSizePixel=0; BaseBar.Parent=Main
@@ -1490,7 +1573,6 @@ local function makeSlider(parent,y,label,minV,maxV,getV,setV,fmt)
     task.defer(function() updateVis(getV(),true) end)
 end
 
--- Original sliders
 makeSlider(SettingsGui,48,"TP Velocity (Carpet)",80,750,
     function() return Config.TpSettings.TpV2Speed or 400 end,
     function(v) Config.TpSettings.TpV2Speed=v; _G.TPVelocity=v end,
@@ -1501,7 +1583,7 @@ makeSlider(SettingsGui,88,"TP Velocity (Grapple)",120,750,
     function(v) return string.format("%d",v) end)
 makeSlider(SettingsGui,128,"Go-To-Brainrot Speed",20,400,
     function() return Config.TpSettings.WalkToBrainrotSpd or 190 end,
-    function(v) Config.TpSettings.WalkToBrainrotSpd=v; _G.SabcomGoSpeed=v; _G.SabcomBrainrotSpeed=v end,
+    function(v) Config.TpSettings.WalkToBrainrotSpd=v; _G.SMKTGoSpeed=v; _G.SMKTBrainrotSpeed=v end,
     function(v) return string.format("%d",v) end)
 makeSlider(SettingsGui,168,"Clone Delay",0.01,1.0,
     function() return Config.TpSettings.CloneDelay or 0.03 end,
@@ -1509,20 +1591,18 @@ makeSlider(SettingsGui,168,"Clone Delay",0.01,1.0,
     function(v) return string.format("%.2fs",v) end)
 makeSlider(SettingsGui,208,"Post-Clone Delay",0.05,1.0,
     function() return Config.TpSettings.PostCloneDelay or 0.1 end,
-    function(v) Config.TpSettings.PostCloneDelay=v; _G.SabcomPostCloneDelay=v end,
+    function(v) Config.TpSettings.PostCloneDelay=v; _G.SMKTPostCloneDelay=v end,
     function(v) return string.format("%.2fs",v) end)
 
--- NEW: Close Speed + Climb Speed
 makeSlider(SettingsGui,248,"Close Speed",20,250,
     function() return Config.TpSettings.CloseSpeed or 80 end,
-    function(v) Config.TpSettings.CloseSpeed=v; _G.SabcomCloseSpeed=v end,
+    function(v) Config.TpSettings.CloseSpeed=v; _G.SMKTCloseSpeed=v end,
     function(v) return string.format("%d",v) end)
 makeSlider(SettingsGui,288,"Climb Speed",50,500,
     function() return Config.TpSettings.ClimbSpeed or 160 end,
-    function(v) Config.TpSettings.ClimbSpeed=v; _G.SabcomClimb=v; _G.SabcomClimbSafe=v end,
+    function(v) Config.TpSettings.ClimbSpeed=v; _G.SMKTClimb=v; _G.SMKTClimbSafe=v end,
     function(v) return string.format("%d",v) end)
 
--- Original: Go to brainrot mode
 local BTMFrame=Instance.new("Frame"); BTMFrame.Size=UDim2.new(0.9,0,0,30)
 BTMFrame.Position=UDim2.new(0.05,0,0,330); BTMFrame.BackgroundColor3=THEME_PANEL
 BTMFrame.BorderSizePixel=0; BTMFrame.Parent=SettingsGui
@@ -1556,7 +1636,6 @@ updateBTMUI()
 WalkBtn.MouseButton1Click:Connect(function() Config.TpSettings.TpToBrainrotMode="Walk"; SaveConfig(); updateBTMUI() end)
 VelBtn.MouseButton1Click:Connect(function() Config.TpSettings.TpToBrainrotMode="Velocity"; SaveConfig(); updateBTMUI() end)
 
--- Original: Priority Sound
 local PSFrame=Instance.new("Frame"); PSFrame.Size=UDim2.new(0.9,0,0,30)
 PSFrame.Position=UDim2.new(0.05,0,0,366); PSFrame.BackgroundColor3=THEME_PANEL
 PSFrame.BorderSizePixel=0; PSFrame.Parent=SettingsGui
@@ -1579,7 +1658,6 @@ PSBtn.MouseButton1Click:Connect(function()
     PSBtn.TextColor3=Config.TpSettings.PrioritySound and THEME_ACCENT or THEME_TEXT_MUTED; SaveConfig()
 end)
 
--- Original: Floor 1 when Floor 2
 local F1F2Frame=Instance.new("Frame"); F1F2Frame.Size=UDim2.new(0.9,0,0,30)
 F1F2Frame.Position=UDim2.new(0.05,0,0,400); F1F2Frame.BackgroundColor3=THEME_PANEL
 F1F2Frame.BorderSizePixel=0; F1F2Frame.Parent=SettingsGui
@@ -1602,7 +1680,6 @@ F1F2Btn.MouseButton1Click:Connect(function()
     F1F2Btn.TextColor3=Config.TpSettings.TpFloor1WhenFloor2 and THEME_ACCENT or THEME_TEXT_MUTED; SaveConfig()
 end)
 
--- Original: Sound ID
 local SIDRow=Instance.new("Frame"); SIDRow.Size=UDim2.new(0.9,0,0,30)
 SIDRow.Position=UDim2.new(0.05,0,0,434); SIDRow.BackgroundColor3=THEME_PANEL
 SIDRow.BorderSizePixel=0; SIDRow.Parent=SettingsGui
@@ -1673,5 +1750,3 @@ if Config.AutoTpOnLoad then
         end
     end)
 end
-
-print("[ENZO TP PANEL] Loaded")
