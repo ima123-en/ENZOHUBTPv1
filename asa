@@ -1,7 +1,3 @@
--- ============================================
--- SMKTHub TP Panel
--- ============================================
-
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Players             = game:GetService("Players")
@@ -43,9 +39,6 @@ if not _G.SMKTPreloadedSynchronizer then
     end
 end
 
--- ============================================
--- GLOBAL DEFAULTS (SMKTHub Core)
--- ============================================
 _G.TPVelocity             = _G.TPVelocity or 400
 _G.SMKTClimb              = _G.SMKTClimb or 160
 _G.SMKTClimbSafe          = _G.SMKTClimbSafe or 250
@@ -85,11 +78,9 @@ _G.ApproachFloor2FromFloor1 = false
 _G.AutoRecoverLagback     = true
 _G.SMKTBrainrotSpeed      = _G.SMKTBrainrotSpeed or 200
 
--- Jump-Refresh settings (during pathfinding)
 _G.SMKTJumpRefreshEnabled  = true
-_G.SMKTJumpRefreshInterval = 1.0
+_G.SMKTJumpRefreshInterval = 0.5
 
--- Exact base coordinates
 local BASES_LOW = {
     [1]=Vector3.new(-476.52,-2,220.94), [2]=Vector3.new(-476.52,-2,113.77),
     [3]=Vector3.new(-476.52,-2,6.18),   [4]=Vector3.new(-476.52,-2,-101.07),
@@ -153,13 +144,9 @@ local Config = {
     GuiPos       = nil,
 }
 
--- keep a clean type-reference for validation on load
 local _defaultTpSettings = {}
 for k, v in pairs(Config.TpSettings) do _defaultTpSettings[k] = v end
 
--- ============================================
--- IMPROVED SAVE SYSTEM (debounced + atomic + validated)
--- ============================================
 local function _buildSaveData()
     return {
         Version      = CONFIG_VERSION,
@@ -228,7 +215,6 @@ local function LoadConfig()
         return
     end
 
-    -- type-validated merge for TpSettings
     if type(data.TpSettings) == "table" then
         for k, def in pairs(_defaultTpSettings) do
             local v = data.TpSettings[k]
@@ -262,9 +248,6 @@ _G.SMKTCloseSpeed       = Config.TpSettings.CloseSpeed or 80
 _G.SMKTClimb            = Config.TpSettings.ClimbSpeed or 160
 _G.SMKTClimbSafe        = Config.TpSettings.ClimbSpeed or 160
 
--- ============================================
--- HELPERS
--- ============================================
 local function isAlive()
     local char = LP.Character
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
@@ -668,9 +651,6 @@ local function _climbCap(hrp, targetY)
     return tonumber(_G.SMKTClimb) or 160
 end
 
--- ============================================
--- MOVEMENT WITH JUMP-REFRESH
--- ============================================
 local function smktVelMove(hrp, waypoints, speedOverride)
     if not hrp or not hrp.Parent or #waypoints == 0 then return function() end end
     local done      = false
@@ -683,9 +663,8 @@ local function smktVelMove(hrp, waypoints, speedOverride)
     local stallT    = os.clock()
     local baseSpeed = _pingAdjustSpeed(speedOverride or tonumber(_G.TPVelocity) or 400)
 
-    -- jump-refresh state
     local jumpEnabled  = _G.SMKTJumpRefreshEnabled ~= false
-    local jumpInterval = tonumber(_G.SMKTJumpRefreshInterval) or 1.0
+    local jumpInterval = tonumber(_G.SMKTJumpRefreshInterval) or 0.5
     local lastJumpT    = os.clock()
 
     equipCarpet()
@@ -722,7 +701,6 @@ local function smktVelMove(hrp, waypoints, speedOverride)
                 spd = math.max(tonumber(_G.SMKTCloseSpeed) or 80, spd * (mag/12))
             end
 
-            -- jump refresh: quick hop every N seconds to refresh position/state
             local doJumpNow = false
             if jumpEnabled and (os.clock() - lastJumpT) >= jumpInterval then
                 lastJumpT = os.clock()
@@ -1180,9 +1158,6 @@ end
 
 _G.SMKTStartTeleport = doVelocityTP
 
--- ========================
--- GUI
--- ========================
 local isInteractingWithSlider = false
 local oldGui = PlayerGui:FindFirstChild("SMKTHub_TP_Panel")
 if oldGui then oldGui:Destroy() end
@@ -1498,9 +1473,6 @@ GuiBox.FocusLost:Connect(function()
 end)
 task.defer(function() local g=Config.GuiScale or 50; setGuiAlpha((g-1)/(100-1),true) end)
 
--- ========================
--- SETTINGS GUI
--- ========================
 local SettingsGui=Instance.new("Frame"); SettingsGui.Name="SettingsGui"
 SettingsGui.AnchorPoint=Vector2.new(0.5,0.5); SettingsGui.Size=UDim2.new(0,280,0,530)
 SettingsGui.Position=UDim2.new(0.5,0,0.5,0); SettingsGui.BackgroundColor3=THEME_BG
