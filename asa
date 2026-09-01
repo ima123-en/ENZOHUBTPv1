@@ -694,20 +694,11 @@ local function smktVelMove(hrp, waypoints, speedOverride)
 			if wpIdx == #waypoints and mag < 12 then
 				spd = math.max(tonumber(_G.SMKTCloseSpeed) or 80, spd * (mag/12))
 			end
-			local doJumpNow = false
-			if jumpEnabled and (os.clock() - lastJumpT) >= jumpInterval then
+			if jumpEnabled and hum and (os.clock() - lastJumpT) >= jumpInterval then
 				lastJumpT = os.clock()
-				doJumpNow = true
+				pcall(function() hum.Jump = true end)
 			end
-			if doJumpNow then
-				local jumpPower = (hum and hum.JumpPower and hum.JumpPower > 0) and hum.JumpPower or 50
-				hrp.AssemblyLinearVelocity = Vector3.new(dir.X * spd, jumpPower, dir.Z * spd)
-				if hum then
-					pcall(function() hum:ChangeState(Enum.HumanoidStateType.Jumping) end)
-				end
-			else
-				hrp.AssemblyLinearVelocity = dir * spd
-			end
+			hrp.AssemblyLinearVelocity = dir * spd
 			stabilize(hum)
 		end
 	end)
@@ -776,55 +767,6 @@ local function getBaseEntry(idx, isUpper, playerZ)
 	local faceDir = (idx <= 4) and Vector3.new(-1,0,0) or Vector3.new(1,0,0)
 	return { pos = coord, look = faceDir }
 end
-
-local ThirdFloorPlatform = Instance.new("Part")
-ThirdFloorPlatform.Name="SMKTHub_ThirdFloor_Floor"; ThirdFloorPlatform.Size=Vector3.new(8,1,8)
-ThirdFloorPlatform.Anchored=true; ThirdFloorPlatform.CanCollide=false
-ThirdFloorPlatform.Transparency=1; ThirdFloorPlatform.CFrame=CFrame.new(0,-1000,0)
-ThirdFloorPlatform.Parent=workspace
-
-local SecondFloorPlatform = Instance.new("Part")
-SecondFloorPlatform.Name="SMKTHub_SecondFloor_Floor"; SecondFloorPlatform.Size=Vector3.new(8,1,8)
-SecondFloorPlatform.Anchored=true; SecondFloorPlatform.CanCollide=false
-SecondFloorPlatform.Transparency=1; SecondFloorPlatform.CFrame=CFrame.new(0,-1000,0)
-SecondFloorPlatform.Parent=workspace
-
-local function updateFloorPlatforms()
-	local sel = getPrioritySelected()
-	local off  = CFrame.new(0,-1000,0)
-	if not sel then
-		ThirdFloorPlatform.CFrame=off; ThirdFloorPlatform.CanCollide=false
-		SecondFloorPlatform.CFrame=off; SecondFloorPlatform.CanCollide=false
-		return
-	end
-	local bp = getBrainrotPos(sel)
-	if not bp then
-		ThirdFloorPlatform.CFrame=off; ThirdFloorPlatform.CanCollide=false
-		SecondFloorPlatform.CFrame=off; SecondFloorPlatform.CanCollide=false
-		return
-	end
-	local char = LP.Character
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-	local charY = hrp and hrp.Position.Y or -math.huge
-	if isThirdFloor(bp) then
-		local platformY = bp.Y - 12
-		ThirdFloorPlatform.Position = Vector3.new(bp.X, platformY, bp.Z)
-		ThirdFloorPlatform.CanCollide = charY > platformY + 0.5
-	else
-		ThirdFloorPlatform.CFrame=off; ThirdFloorPlatform.CanCollide=false
-	end
-	if isSecondFloor(bp) and Config.TpSettings.TpFloor1WhenFloor2 then
-		local platformY = bp.Y - 11
-		SecondFloorPlatform.Position = Vector3.new(bp.X, platformY, bp.Z)
-		SecondFloorPlatform.CanCollide = charY > platformY + 0.5
-	else
-		SecondFloorPlatform.CFrame=off; SecondFloorPlatform.CanCollide=false
-	end
-end
-
-task.spawn(function()
-	while workspace and workspace.Parent do pcall(updateFloorPlatforms); task.wait(0.1) end
-end)
 
 local function EquipToolLP(name)
 	local char = LP.Character
@@ -953,13 +895,17 @@ local function doClone()
 	return success
 end
 
-local function goToBrainrot(brainPos)
+local function goToBrainrot(brainPos, selRef)
 	if not brainPos then return end
 	local char = LP.Character
 	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
 	local hum  = char and char:FindFirstChildOfClass("Humanoid")
 	if not hrp or not hum then return end
 	equipCarpet(); vZero(hrp); stabilize(hum)
+
+	local needsHover = isThirdFloor(brainPos)
+		or (isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2)
+
 	local targetPos
 	if isThirdFloor(brainPos) then
 		targetPos = Vector3.new(brainPos.X, brainPos.Y-7, brainPos.Z)
@@ -969,34 +915,10 @@ local function goToBrainrot(brainPos)
 		local look = hrp.CFrame.LookVector
 		targetPos  = Vector3.new((brainPos - look*3).X, hrp.Position.Y, (brainPos - look*3).Z)
 	end
+
 	local mode = Config.TpSettings.TpToBrainrotMode or "Velocity"
-	if mode == "Velocity" then
-		local freezePos = targetPos + Vector3.new(0, 1.5, 0)
-		for phase = 1, 2 do
-			local c = LP.Character
-			local h = c and c:FindFirstChild("HumanoidRootPart")
-			local hm= c and c:FindFirstChildOfClass("Humanoid")
-			if not h or not hm then break end
-			local conns = {}
-			local function lockIt()
-				if h then h.Anchored=true; h.AssemblyLinearVelocity=Vector3.zero
-					h.AssemblyAngularVelocity=Vector3.zero; h.CFrame=CFrame.new(freezePos) end
-				equipCarpet()
-			end
-			table.insert(conns, RunService.RenderStepped:Connect(lockIt))
-			table.insert(conns, RunService.Heartbeat:Connect(lockIt))
-			task.wait(0.12)
-			for _, cn in ipairs(conns) do cn:Disconnect() end
-			if h then
-				h.Anchored=false; h.AssemblyLinearVelocity=Vector3.zero
-				h.AssemblyAngularVelocity=Vector3.zero; h.CFrame=CFrame.new(freezePos)
-			end
-			if hm then hm.PlatformStand=false; hm:ChangeState(Enum.HumanoidStateType.Running) end
-			if not isAlive() then _G.TPStatus="player_died_aborted"; return end
-			if (h.Position-freezePos).Magnitude > 35 then _G.TPStatus="lagback_detected_aborted"; return end
-			if phase < 2 then task.wait(0.2) end
-		end
-	elseif mode == "Walk" then
+
+	if mode == "Walk" then
 		local route = computeRoute(hrp.Position, targetPos)
 		local stopMove = smktVelMove(hrp, route, _pingAdjustSpeed(tonumber(_G.SMKTGoSpeed) or 200))
 		local t0 = tick()
@@ -1007,19 +929,78 @@ local function goToBrainrot(brainPos)
 			stabilize(hum); task.wait(0.02)
 		end
 		stopMove(); vZero(hrp)
-	else
-		for _ = 1, 2 do
-			if not isAlive() then return end
-			local c = LP.Character
-			local h = c and c:FindFirstChild("HumanoidRootPart")
-			if not h then return end
-			equipCarpet(); vZero(h)
-			local cf = h.CFrame
-			h.CFrame = CFrame.new(targetPos+Vector3.new(0,0.5,0)) *
-				CFrame.fromMatrix(Vector3.zero, cf.RightVector, cf.UpVector, cf.LookVector)
-			vZero(h); stabilize(hum); task.wait(0.3)
-		end
 	end
+
+	if not needsHover then
+		if mode ~= "Walk" then
+			for _ = 1, 2 do
+				if not isAlive() then return end
+				if LP:GetAttribute("Stealing") then return end
+				local c = LP.Character
+				local h = c and c:FindFirstChild("HumanoidRootPart")
+				if not h then return end
+				equipCarpet(); vZero(h)
+				local cf = h.CFrame
+				h.CFrame = CFrame.new(targetPos+Vector3.new(0,0.5,0)) *
+					CFrame.fromMatrix(Vector3.zero, cf.RightVector, cf.UpVector, cf.LookVector)
+				vZero(h); stabilize(hum); task.wait(0.3)
+			end
+		end
+		return
+	end
+
+	local freezePos     = targetPos + Vector3.new(0, 1.5, 0)
+	local maxHoverTime  = 25
+	local t0            = os.clock()
+	local holdGain      = 8
+	local maxHoldSpeed  = 60
+	local snapDist      = 0.2
+	local moveThresh    = 0.1
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		local c = LP.Character
+		local h = c and c:FindFirstChild("HumanoidRootPart")
+		local hm = c and c:FindFirstChildOfClass("Humanoid")
+		if not h or not hm or hm.Health <= 0 then
+			if conn then conn:Disconnect() end
+			return
+		end
+		if LP:GetAttribute("Stealing") then
+			if conn then conn:Disconnect() end
+			return
+		end
+
+		if hm.MoveDirection.Magnitude > moveThresh then
+			if conn then conn:Disconnect() end
+			return
+		end
+
+		local offset = freezePos - h.Position
+		local dist   = offset.Magnitude
+		if dist > snapDist then
+			local spd = math.min(dist * holdGain, maxHoldSpeed)
+			h.AssemblyLinearVelocity = offset.Unit * spd
+		else
+			h.AssemblyLinearVelocity = Vector3.zero
+		end
+		h.AssemblyAngularVelocity = Vector3.zero
+
+		stabilize(hm)
+		equipCarpet()
+
+		local stolen = false
+		if selRef and selRef.model and not selRef.model.Parent then
+			stolen = true
+		end
+		if not getPrioritySelected() then
+			stolen = true
+		end
+		if stolen
+			or (os.clock() - t0) > maxHoverTime
+			or dist > 35 then
+			if conn then conn:Disconnect() end
+		end
+	end)
 end
 
 local function playPrioritySound()
@@ -1141,12 +1122,18 @@ local function doVelocityTP()
 	if cloneOk then
 		_G.TPStatus = "post_clone_stabilize"
 
-		local cloneName = tostring(LP.UserId) .. "_Clone"
+		local cloneName  = tostring(LP.UserId) .. "_Clone"
+		local prePos     = hrp.Position
 		local swapTimeout = tick()
 		repeat
-			task.wait(0.05)
+			task.wait(0.03)
 			if checkAbort() then return end
-		until not Workspace:FindFirstChild(cloneName, true) or tick() - swapTimeout > 2.5
+			char = LP.Character
+			hrp  = char and char:FindFirstChild("HumanoidRootPart")
+			if not hrp then break end
+		until not Workspace:FindFirstChild(cloneName, true)
+			or (hrp.Position - prePos).Magnitude > 3
+			or tick() - swapTimeout > 1.2
 
 		_G.TPStatus = "post_clone_stabilize"
 
@@ -1156,12 +1143,12 @@ local function doVelocityTP()
 		if not hrp then abort("no_char_after_swap"); return end
 
 		vZero(hrp); stabilize(hum); equipCarpet()
-		task.wait(math.max(0.1, tonumber(_G.SMKTPostCloneDelay) or 0.1))
+		task.wait(math.max(0.05, tonumber(_G.SMKTPostCloneDelay) or 0.1))
 
 		if checkAbort() then return end
 
 		_G.TPStatus = "going_to_brainrot"
-		goToBrainrot(brainPos)
+		goToBrainrot(brainPos, selData)
 
 		if _G.TPStatus ~= "lagback_detected_aborted"
 			and _G.TPStatus ~= "player_died_aborted"
