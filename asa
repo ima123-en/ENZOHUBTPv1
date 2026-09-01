@@ -1,3 +1,5 @@
+in welcher zeile kann ich das noch höher machen das es bissl weiter nach oben fliegt unter dem brainrot weil es nicht grabben kann weil man zu weit unten ist also halt in der base dieser unsichtbare block untereinem checkst du was ich mein?
+
 local Players             = game:GetService("Players")
 local RunService          = game:GetService("RunService")
 local UserInputService    = game:GetService("UserInputService")
@@ -908,9 +910,9 @@ local function goToBrainrot(brainPos, selRef)
 
 	local targetPos
 	if isThirdFloor(brainPos) then
-		targetPos = Vector3.new(brainPos.X, brainPos.Y-7, brainPos.Z)
+		targetPos = Vector3.new(brainPos.X, brainPos.Y-5, brainPos.Z)
 	elseif isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2 then
-		targetPos = Vector3.new(brainPos.X, brainPos.Y-10, brainPos.Z)
+		targetPos = Vector3.new(brainPos.X, brainPos.Y-7, brainPos.Z)
 	else
 		local look = hrp.CFrame.LookVector
 		targetPos  = Vector3.new((brainPos - look*3).X, hrp.Position.Y, (brainPos - look*3).Z)
