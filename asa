@@ -697,7 +697,10 @@ local function smktVelMove(hrp, waypoints, speedOverride)
 			end
 			if jumpEnabled and hum and (os.clock() - lastJumpT) >= jumpInterval then
 				lastJumpT = os.clock()
-				pcall(function() hum.Jump = true end)
+				pcall(function()
+					hum:ChangeState(Enum.HumanoidStateType.Jumping)
+					hum.Jump = true
+				end)
 			end
 			hrp.AssemblyLinearVelocity = dir * spd
 			stabilize(hum)
