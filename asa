@@ -1,4 +1,3 @@
-
 local Players             = game:GetService("Players")
 local RunService          = game:GetService("RunService")
 local UserInputService    = game:GetService("UserInputService")
@@ -9,7 +8,9 @@ local GuiService          = game:GetService("GuiService")
 local TweenService        = game:GetService("TweenService")
 local SoundService        = game:GetService("SoundService")
 
-local LP        = Players.LocalPlayer
+local LP
+repeat task.wait() until Players.LocalPlayer
+LP = Players.LocalPlayer
 local PlayerGui = LP:WaitForChild("PlayerGui")
 
 local _syncJobId = tostring(game.JobId)
@@ -472,167 +473,841 @@ local function _pingAdjustSpeed(baseSpeed)
 	return baseSpeed
 end
 
-local function _clearWide(from, to, radius)
-	radius = radius or (tonumber(_G.SMKTPathRadius) or 2.5)
-	local dir  = to - from
-	local dist = dir.Magnitude
-	if dist < 0.1 then return true end
+do
+
+local _OTHER_CLONES = {}
+local PathfindingService = game:GetService("PathfindingService")
+
+local _DIRS = { Vector3.new(1,0,0), Vector3.new(-1,0,0), Vector3.new(0,0,1), Vector3.new(0,0,-1) }
+local _STRUCT = { ["structure base home"] = true, ["Wall"] = true, ["Floor"] = true, ["Roof"] = true, ["Laser"] = true, ["LaserHitbox"] = true }
+local _SKIP_NAME = { ["DeliveryHitbox"]=true, ["StealHitbox"]=true,
+	["AnimalTarget"]=true, ["Multiplier"]=true, ["Hitbox"]=true,
+	["Spawn"]=true, ["MainRoot"]=true, ["SecondFloor"]=true, ["ThirdFloor"]=true, ["Slope"]=true }
+
+local function _blocks(inst)
+	if not inst then return false end
+	if _SKIP_NAME[inst.Name] then return false end
+	if inst.CanCollide then return true end
+	if _STRUCT[inst.Name] then return true end
+	local s = inst.Size
+	if s and math.max(s.X*s.Y, s.X*s.Z, s.Y*s.Z) > 150 then return true end
+	return false
+end
+
+local function _blocksWide(inst)
+	if not inst then return false end
+	if _SKIP_NAME[inst.Name] then return false end
+	if inst.CanCollide then return true end
+	if _STRUCT[inst.Name] then return true end
+	local s = inst.Size
+	if s and math.max(s.X*s.Y, s.X*s.Z, s.Y*s.Z) > 30 then return true end
+	return false
+end
+
+local function _block(origin, target, blockFn)
+	blockFn = blockFn or _blocks
 	local rp = RaycastParams.new()
 	rp.FilterType = Enum.RaycastFilterType.Exclude
-	local char = LP.Character
-	rp.FilterDescendantsInstances = char and { char } or {}
-	local offsets = {
-		Vector3.zero,
-		Vector3.new( radius, 0, 0), Vector3.new(-radius, 0, 0),
-		Vector3.new(0, 0,  radius), Vector3.new(0, 0, -radius),
-		Vector3.new(0,  radius*0.5, 0),
-	}
-	for _, off in ipairs(offsets) do
-		local origin = from + off
-		local hit = workspace:Raycast(origin, dir.Unit * dist, rp)
-		if hit then
-			local inst = hit.Instance
-			local skip = false
-			if inst then
-				if not inst.CanCollide then skip = true end
-				if not inst.Anchored then skip = true end
-				local nm = (inst.Name or ""):lower()
-				if nm:find("terrain") or nm:find("baseplate") then skip = false end
-				if nm:find("clone") or nm:find("pet") or nm:find("animal") then skip = true end
-				if inst:IsDescendantOf(workspace.Terrain) then skip = false end
-			end
-			if not skip then return false end
-		end
+	rp.IgnoreWater = true
+	local skip = {}
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl.Character then skip[#skip + 1] = pl.Character end
+	end
+	for _, cl in ipairs(_OTHER_CLONES) do skip[#skip + 1] = cl end
+	local o = origin
+	for _ = 1, 16 do
+		rp.FilterDescendantsInstances = skip
+		local d = target - o
+		if d.Magnitude < 0.05 then return nil end
+		local res = workspace:Raycast(o, d, rp)
+		if not res then return nil end
+		if blockFn(res.Instance) then return res end
+		skip[#skip + 1] = res.Instance
+		o = res.Position + d.Unit * 0.3
+	end
+	return nil
+end
+
+local function _clear(a, b) return _block(a, b) == nil end
+
+function _len(pts)
+	local s, prev = 0, pts[1]
+	for k = 2, #pts do s = s + (pts[k] - prev).Magnitude; prev = pts[k] end
+	return s
+end
+
+local _CLEARANCE = 16
+local function _clearWideRay(a, b) return _block(a, b, _blocksWide) == nil end
+
+local function _sweepBlockFn(inst)
+	if _G.SMKTStrictSweep == false then return _blocks(inst) end
+	return _blocksWide(inst)
+end
+
+local _SWEEP_R = 4
+local _ENDPOINT_SLACK = 6
+local _canSphere = nil
+
+local function _sweepDir(a, b)
+	local rp = RaycastParams.new()
+	rp.FilterType = Enum.RaycastFilterType.Exclude
+	rp.IgnoreWater = true
+	local skip = {}
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl.Character then skip[#skip + 1] = pl.Character end
+	end
+	for _, cl in ipairs(_OTHER_CLONES) do skip[#skip + 1] = cl end
+	local o = a
+	for _ = 1, 24 do
+		rp.FilterDescendantsInstances = skip
+		local d = b - o
+		if d.Magnitude < 0.05 then return false end
+		local res
+		res = workspace:Spherecast(o, _SWEEP_R, d, rp)
+		if res == nil then _canSphere = false; return nil end
+		if not res then return false end
+		if _sweepBlockFn(res.Instance) then return true end
+		skip[#skip + 1] = res.Instance
+		local adv = (res.Distance or 0) - 0.05
+		if adv > 0 then o = o + d.Unit * math.min(adv, d.Magnitude) end
 	end
 	return true
 end
 
-local function voxelRoute(startPos, endPos, up)
-	local cell   = tonumber(_G.SMKTPathCell)   or 4
-	local radius = tonumber(_G.SMKTPathRadius) or 2.5
-	local height = tonumber(_G.SMKTPathHeight) or 5
-	up = up or 0
-	local function snap(p)
-		return Vector3.new(
-			math.floor(p.X/cell+0.5)*cell,
-			math.floor(p.Y/cell+0.5)*cell,
-			math.floor(p.Z/cell+0.5)*cell
-		)
+local function _sweepBlocked(a, b, slackA, slackB)
+	if _canSphere == nil then
+		_canSphere = workspace:Spherecast(Vector3.new(0, 10000, 0), 1, Vector3.new(0, -1, 0), RaycastParams.new())
 	end
-	local function heur(a, b)
-		local d = b - a
-		return math.abs(d.X) + math.abs(d.Y)*1.5 + math.abs(d.Z)
+	if not _canSphere then return nil end
+	local d = b - a
+	local len = d.Magnitude
+	if len < 0.1 then return false end
+	local u = d / len
+	local a2 = a + u * math.min(slackA or _ENDPOINT_SLACK, len * 0.4)
+	local b2 = b - u * math.min(slackB or _ENDPOINT_SLACK, len * 0.4)
+	local fwd = _sweepDir(a2, b2)
+	if fwd == nil then return nil end
+	if fwd then return true end
+	local rev = _sweepDir(b2, a2)
+	if rev == nil then return nil end
+	return rev
+end
+
+local function _clearWide(a, b, slackA, slackB)
+	if not _clear(a, b) then return false end
+	local sw = _sweepBlocked(a, b, slackA, slackB)
+	if sw ~= nil then return not sw end
+	local d = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+	if d.Magnitude < 0.1 then
+		local ox = Vector3.new(_CLEARANCE, 0, 0)
+		local oz = Vector3.new(0, 0, _CLEARANCE)
+		return _clearWideRay(a + ox, b + ox) and _clearWideRay(a - ox, b - ox)
+			and _clearWideRay(a + oz, b + oz) and _clearWideRay(a - oz, b - oz)
 	end
-	local function blocked(p)
-		local rp = RaycastParams.new()
-		rp.FilterType = Enum.RaycastFilterType.Exclude
+	local perp = Vector3.new(-d.Z, 0, d.X).Unit * _CLEARANCE
+	local up = Vector3.new(0, _CLEARANCE, 0)
+	return _clearWideRay(a + perp, b + perp)
+		and _clearWideRay(a - perp, b - perp)
+		and _clearWideRay(a + up, b + up)
+		and _clearWideRay(a - up, b - up)
+end
+
+local function _pullWide(pts)
+	if #pts <= 2 then return pts end
+	local out = { pts[1] }
+	local i = 1
+	local n = #pts
+	while i < n do
+		local j = n
+		while j > i + 1 do
+			local a, b = out[#out], pts[j]
+			local sA = (i == 1) and _ENDPOINT_SLACK or 0
+			local sB = (j == n) and _ENDPOINT_SLACK or 0
+			if _clearWide(a, b, sA, sB) then break end
+			j = j - 1
+		end
+		out[#out + 1] = pts[j]
+		i = j
+	end
+	return out
+end
+
+local function _pushOffWalls(pts)
+	if #pts <= 2 then return pts end
+	local MARGIN = 8
+	local MAX_PUSH = 12
+	local out = { pts[1] }
+	for i = 2, #pts - 1 do
+		local p = pts[i]
+		local shift = Vector3.zero
+		for _, dr in ipairs(_DIRS) do
+			local res = _block(p, p + dr * MARGIN, _blocks)
+			if res then
+				local dist = (res.Position - p).Magnitude
+				if dist < MARGIN then
+					shift = shift - dr * (MARGIN - dist)
+				end
+			end
+		end
+		do
+			local resUp = _block(p, p + Vector3.new(0, MARGIN, 0), _blocks)
+			if resUp then
+				local dist = (resUp.Position - p).Magnitude
+				if dist < 4 then shift = shift + Vector3.new(0, -(4 - dist), 0) end
+			end
+		end
+		if shift.Magnitude > 0.1 then
+			if shift.Magnitude > MAX_PUSH then shift = shift.Unit * MAX_PUSH end
+			local moved = p + shift
+			if _clear(out[#out], moved) then
+				out[#out + 1] = moved
+			else
+				out[#out + 1] = p
+			end
+		else
+			out[#out + 1] = p
+		end
+	end
+	out[#out + 1] = pts[#pts]
+	return out
+end
+
+local voxelRoute = (function()
+	local _vxFloor, _vxSqrt = math.floor, math.sqrt
+	local _vxMin, _vxMax = math.min, math.max
+	local function _vxAbs(n) return n < 0 and -n or n end
+
+	local _vxOverlap = OverlapParams.new()
+	_vxOverlap.FilterType = Enum.RaycastFilterType.Exclude
+	_vxOverlap.RespectCanCollide = true
+
+	local _vxCast = RaycastParams.new()
+	_vxCast.FilterType = Enum.RaycastFilterType.Exclude
+	_vxCast.RespectCanCollide = true
+	_vxCast.IgnoreWater = true
+
+	local _vxOrigin
+	local _vxDimX, _vxDimY, _vxDimZ = 0, 0, 0
+	local _vxSz, _vxInflate = tonumber(_G.SMKTPathCell) or 4, (tonumber(_G.SMKTPathRadius) or 2.5) + (tonumber(_G.SMKTPathRadius) or 2.5)*0.5
+	local _vxSolid = {}
+	local _vxHeight = tonumber(_G.SMKTPathHeight) or 5
+
+	local function _vxWorld(sz, x, y, z)
+		local h = sz * 0.5
+		return Vector3.new(_vxOrigin.X + x * sz + h, _vxOrigin.Y + y * sz + h, _vxOrigin.Z + z * sz + h)
+	end
+	local function _vxKey(x, y, z) return x + y * 1024 + z * 1048576 end
+
+	local function _vxIsSolid(x, y, z)
+		if x < 0 or y < 0 or z < 0 or x >= _vxDimX or y >= _vxDimY or z >= _vxDimZ then return true end
+		local k = _vxKey(x, y, z)
+		local c = _vxSolid[k]
+		if c ~= nil then return c end
+		local h = _vxSz * 0.5
+		local cx = _vxOrigin.X + x * _vxSz + h
+		local cy = _vxOrigin.Y + y * _vxSz + h
+		local cz = _vxOrigin.Z + z * _vxSz + h
+		local sxz = _vxSz + _vxInflate
+		local vy = _vxHeight > _vxSz and _vxHeight or _vxSz
+		local vcy = cy - h + vy * 0.5
+		local parts = workspace:GetPartBoundsInBox(CFrame.new(cx, vcy, cz), Vector3.new(sxz, vy, sxz), _vxOverlap)
+		local solid = #parts > 0
+		_vxSolid[k] = solid
+		return solid
+	end
+
+	local function _vxSegClear(from, to, radius, height, sample)
+		local dir = to - from
+		local mag = dir.Magnitude
+		if mag < 0.05 then return true end
+		if workspace:Raycast(from, dir, _vxCast) then return false end
+		local r = radius > 1 and radius or 1
+		if workspace:Blockcast(CFrame.new(from), Vector3.new(r * 2, height, r * 2), dir, _vxCast) ~= nil then return false end
+		local n = _vxFloor(mag)
+		if sample ~= false and n >= 2 then
+			local step = dir / n
+			local torso = Vector3.new(r * 2, 3, r * 2)
+			for i = 1, n - 1 do
+				local pt = from + step * i
+				if #workspace:GetPartBoundsInBox(CFrame.new(pt), torso, _vxOverlap) > 0 then return false end
+			end
+		end
+		return true
+	end
+
+	local _vxNeigh = {}
+	do
+		for dx = -1, 1 do
+			for dy = -1, 1 do
+				for dz = -1, 1 do
+					if dx ~= 0 or dy ~= 0 or dz ~= 0 then
+						local nz = (dx ~= 0 and 1 or 0) + (dy ~= 0 and 1 or 0) + (dz ~= 0 and 1 or 0)
+						local kd = dx + dy * 1024 + dz * 1048576
+						_vxNeigh[#_vxNeigh + 1] = { dx, dy, dz, _vxSqrt(dx * dx + dy * dy + dz * dz), nz, kd }
+					end
+				end
+			end
+		end
+	end
+
+	local function _vxNoCorner(cx, cy, cz, off)
+		if off[5] < 2 then return true end
+		if off[1] ~= 0 and _vxIsSolid(cx + off[1], cy, cz) then return false end
+		if off[2] ~= 0 and _vxIsSolid(cx, cy + off[2], cz) then return false end
+		if off[3] ~= 0 and _vxIsSolid(cx, cy, cz + off[3]) then return false end
+		return true
+	end
+
+	local function _vxSnapGoal(goalPos, x, y, z)
+		if not _vxIsSolid(x, y, z) then return x, y, z end
+		for r = 1, 16 do
+			for dx = -r, r do
+				for dy = -r, r do
+					for dz = -r, r do
+						if _vxMax(_vxAbs(dx), _vxAbs(dy), _vxAbs(dz)) == r then
+							local nx, ny, nz = x + dx, y + dy, z + dz
+							if not _vxIsSolid(nx, ny, nz) and (_vxWorld(_vxSz, nx, ny, nz) - goalPos).Magnitude <= 8 then
+								return nx, ny, nz
+							end
+						end
+					end
+				end
+			end
+		end
+		return x, y, z
+	end
+
+	local function _vxSnapStart(pos, x, y, z)
+		if not _vxIsSolid(x, y, z) then return x, y, z end
+		for r = 1, 16 do
+			for dx = -r, r do
+				for dy = -r, r do
+					for dz = -r, r do
+						if _vxMax(_vxAbs(dx), _vxAbs(dy), _vxAbs(dz)) == r then
+							local nx, ny, nz = x + dx, y + dy, z + dz
+							if not _vxIsSolid(nx, ny, nz) and not workspace:Raycast(pos, _vxWorld(_vxSz, nx, ny, nz) - pos, _vxCast) then
+								return nx, ny, nz
+							end
+						end
+					end
+				end
+			end
+		end
+		return x, y, z
+	end
+
+	local function _vxPush(h, f, key)
+		local i = #h + 1
+		h[i] = { f, key }
+		while i > 1 do
+			local p = _vxFloor(i * 0.5)
+			if h[p][1] <= h[i][1] then break end
+			h[p], h[i] = h[i], h[p]
+			i = p
+		end
+	end
+	local function _vxPop(h)
+		local n = #h
+		if n == 0 then return nil end
+		local top = h[1]
+		h[1] = h[n]
+		h[n] = nil
+		n -= 1
+		local i = 1
+		while true do
+			local l, r, s = i + i, i + i + 1, i
+			if l <= n and h[l][1] < h[s][1] then s = l end
+			if r <= n and h[r][1] < h[s][1] then s = r end
+			if s == i then break end
+			h[i], h[s] = h[s], h[i]
+			i = s
+		end
+		return top[2]
+	end
+
+	local _vxHeurW = 2
+	local function _vxAStar(sz, startCell, goalCell, startPos, goalPos)
+		local sx, sy, sz2 = _vxSnapStart(startPos, startCell.x, startCell.y, startCell.z)
+		local gx, gy, gz = _vxSnapGoal(goalPos, goalCell.x, goalCell.y, goalCell.z)
+		local goalKey = _vxKey(gx, gy, gz)
+		local startKey = _vxKey(sx, sy, sz2)
+
+		local nodes = { [startKey] = { x = sx, y = sy, z = sz2, g = 0, parent = nil } }
+		local closed = {}
+		local heap = {}
+		_vxPush(heap, 0, startKey)
+
+		local function Heur(x, y, z)
+			local ax, ay, az = x - gx, y - gy, z - gz
+			return _vxSqrt(ax * ax + ay * ay + az * az)
+		end
+
+		local pops = 0
+		while #heap > 0 do
+			local curKey = _vxPop(heap)
+			if closed[curKey] then continue end
+			closed[curKey] = true
+			pops += 1
+			if pops > 300000 then break end
+
+			local cur = nodes[curKey]
+			if curKey == goalKey then
+				local path = {}
+				local n = cur
+				while n do
+					path[#path + 1] = _vxWorld(sz, n.x, n.y, n.z)
+					n = n.parent and nodes[n.parent]
+				end
+				local rev = {}
+				for i = #path, 1, -1 do rev[#rev + 1] = path[i] end
+				return rev
+			end
+
+			local cx, cy, cz = cur.x, cur.y, cur.z
+			local cg = cur.g
+			for _, off in _vxNeigh do
+				local nk = curKey + off[6]
+				if closed[nk] then continue end
+				local nx, ny, nz = cx + off[1], cy + off[2], cz + off[3]
+				if _vxIsSolid(nx, ny, nz) then continue end
+				if not _vxNoCorner(cx, cy, cz, off) then continue end
+				local tg = cg + off[4]
+				local ex = nodes[nk]
+				if not ex or tg < ex.g then
+					if ex then
+						ex.g, ex.parent, ex.x, ex.y, ex.z = tg, curKey, nx, ny, nz
+					else
+						nodes[nk] = { x = nx, y = ny, z = nz, g = tg, parent = curKey }
+					end
+					_vxPush(heap, tg + _vxHeurW * Heur(nx, ny, nz), nk)
+				end
+			end
+		end
+		return nil
+	end
+
+	local function _vxSimplify(path, radius, height)
+		if not path or #path < 3 then return path end
+		local out = { path[1] }
+		local anchor = 1
+		local i = 2
+		while i <= #path do
+			if not _vxSegClear(path[anchor], path[i + 1] or path[i], radius, height, false) then
+				out[#out + 1] = path[i]
+				anchor = i
+			end
+			i += 1
+		end
+		out[#out + 1] = path[#path]
+		return out
+	end
+
+	return function(fromPos, toPos)
 		local char = LP.Character
-		rp.FilterDescendantsInstances = char and { char } or {}
-		local dirs6 = {
-			Vector3.new(1,0,0)*radius,  Vector3.new(-1,0,0)*radius,
-			Vector3.new(0,0,1)*radius,  Vector3.new(0,0,-1)*radius,
-			Vector3.new(0,1,0)*height,  Vector3.new(0,-1,0)*height,
+		local _flt = char and { char } or {}
+		for _, cl in ipairs(_OTHER_CLONES) do _flt[#_flt + 1] = cl end
+		_vxOverlap.FilterDescendantsInstances = _flt
+		_vxCast.FilterDescendantsInstances = _flt
+
+		local sz      = tonumber(_G.SMKTPathCell)   or 4
+		local inflate = tonumber(_G.SMKTPathRadius) or 2.5
+		local height  = tonumber(_G.SMKTPathHeight) or 5
+		local pad     = tonumber(_G.SMKTPathPad)    or 40
+
+		_vxSz, _vxInflate, _vxHeight = sz, inflate, height
+		table.clear(_vxSolid)
+
+		local mn = Vector3.new(_vxMin(fromPos.X, toPos.X), _vxMin(fromPos.Y, toPos.Y), _vxMin(fromPos.Z, toPos.Z)) - Vector3.new(pad, pad, pad)
+		local mx = Vector3.new(_vxMax(fromPos.X, toPos.X), _vxMax(fromPos.Y, toPos.Y), _vxMax(fromPos.Z, toPos.Z)) + Vector3.new(pad, pad, pad)
+		_vxOrigin = mn
+		local size = mx - mn
+		_vxDimX = _vxFloor(size.X / sz) + 1
+		_vxDimY = _vxFloor(size.Y / sz) + 1
+		_vxDimZ = _vxFloor(size.Z / sz) + 1
+		if _vxDimX * _vxDimY * _vxDimZ > 200000 then return nil end
+
+		local startCell = {
+			x = _vxFloor((fromPos.X - _vxOrigin.X) / sz),
+			y = _vxFloor((fromPos.Y - _vxOrigin.Y) / sz),
+			z = _vxFloor((fromPos.Z - _vxOrigin.Z) / sz),
 		}
-		for _, d in ipairs(dirs6) do
-			local hit = workspace:Raycast(p, d, rp)
-			if hit and hit.Instance and hit.Instance.CanCollide and hit.Instance.Anchored then
-				local nm = (hit.Instance.Name or ""):lower()
-				if not nm:find("clone") and not nm:find("pet") and not nm:find("animal") then
+		local goalCell = {
+			x = _vxFloor((toPos.X - _vxOrigin.X) / sz),
+			y = _vxFloor((toPos.Y - _vxOrigin.Y) / sz),
+			z = _vxFloor((toPos.Z - _vxOrigin.Z) / sz),
+		}
+
+		local path = _vxAStar(sz, startCell, goalCell, fromPos, toPos)
+		if not path then return nil end
+		path = _vxSimplify(path, inflate, height)
+		if not path or #path == 0 then return nil end
+
+		local route = {}
+		for idx = 2, #path do route[#route + 1] = path[idx] end
+		if #route == 0 or (route[#route] - toPos).Magnitude > 0.5 then
+			route[#route + 1] = toPos
+		end
+		return route
+	end
+end)()
+
+local _MAP_CENTER = { minX = -458, maxX = -362, minZ = -40, maxZ = 185 }
+local _BYPASS_Z_NORTH, _BYPASS_Z_SOUTH = 205, -95
+local _BYPASS_X_WEST,  _BYPASS_X_EAST  = -525, -295
+
+local function _inCenterZone(x, z)
+	return x >= _MAP_CENTER.minX and x <= _MAP_CENTER.maxX
+		and z >= _MAP_CENTER.minZ and z <= _MAP_CENTER.maxZ
+end
+
+local function _segmentCrossesCenter(a, b)
+	if _inCenterZone(a.X, a.Z) or _inCenterZone(b.X, b.Z) then return true end
+	for i = 1, 10 do
+		local t = i / 11
+		if _inCenterZone(a.X + (b.X - a.X) * t, a.Z + (b.Z - a.Z) * t) then return true end
+	end
+	return false
+end
+
+local function _findBestCenterDetour(fromPos, toPos, y)
+	local candidates = {
+		{ Vector3.new(fromPos.X, y, _BYPASS_Z_NORTH), Vector3.new(toPos.X, y, _BYPASS_Z_NORTH) },
+		{ Vector3.new(fromPos.X, y, _BYPASS_Z_SOUTH), Vector3.new(toPos.X, y, _BYPASS_Z_SOUTH) },
+		{ Vector3.new(_BYPASS_X_WEST, y, fromPos.Z), Vector3.new(_BYPASS_X_WEST, y, toPos.Z) },
+		{ Vector3.new(_BYPASS_X_EAST, y, fromPos.Z), Vector3.new(_BYPASS_X_EAST, y, toPos.Z) },
+	}
+	local best, bestLen = nil, math.huge
+	for _, pair in ipairs(candidates) do
+		local w1, w2 = pair[1], pair[2]
+		if _clearWide(fromPos, w1) and _clearWide(w1, w2) and _clearWide(w2, toPos) then
+			local len = (fromPos - w1).Magnitude + (w1 - w2).Magnitude + (w2 - toPos).Magnitude
+			if len < bestLen then bestLen = len; best = { w1, w2 } end
+		end
+	end
+	return best
+end
+
+local function _nearestBase(p)
+	local bi, bd = nil, math.huge
+	for i = 1, 8 do
+		local b = BASES_LOW[i]
+		local d = (p.X - b.X) ^ 2 + (p.Z - b.Z) ^ 2
+		if d < bd then bd = d; bi = i end
+	end
+	if bd > 70 * 70 then return nil end
+	return bi
+end
+
+local function _rowBoxX() return tonumber(_G.SMKTRowBoxX) or 26 end
+local function _rowBoxZ() return tonumber(_G.SMKTRowBoxZ) or 30 end
+local function _rowLane() return tonumber(_G.SMKTRowLane) or 30 end
+
+local function _segmentHitsOtherBase(a, b, ignA, ignB)
+	local hx, hz = _rowBoxX(), _rowBoxZ()
+	for i = 0, 24 do
+		local t = i / 24
+		local px = a.X + (b.X - a.X) * t
+		local pz = a.Z + (b.Z - a.Z) * t
+		for k = 1, 8 do
+			if k ~= ignA and k ~= ignB then
+				local bs = BASES_LOW[k]
+				if math.abs(px - bs.X) <= hx and math.abs(pz - bs.Z) <= hz then
 					return true
 				end
 			end
 		end
-		return false
 	end
-	local sSnap = snap(startPos)
-	local eSnap = snap(endPos)
-	if _clearWide(startPos, endPos, radius) then
-		return { startPos, endPos }
-	end
-	local DIRS = {
-		Vector3.new(1,0,0), Vector3.new(-1,0,0),
-		Vector3.new(0,0,1), Vector3.new(0,0,-1),
-		Vector3.new(0,1,0), Vector3.new(0,-1,0),
-		Vector3.new(1,0,1).Unit,  Vector3.new(-1,0,1).Unit,
-		Vector3.new(1,0,-1).Unit, Vector3.new(-1,0,-1).Unit,
-		Vector3.new(1,1,0).Unit,  Vector3.new(-1,1,0).Unit,
-		Vector3.new(0,1,1).Unit,  Vector3.new(0,1,-1).Unit,
-	}
-	local open   = {}
-	local closed = {}
-	local gScore = {}
-	local parent = {}
-	local startKey = sSnap.X.."_"..sSnap.Y.."_"..sSnap.Z
-	gScore[startKey] = 0
-	table.insert(open, { pos = sSnap, f = heur(sSnap, eSnap), g = 0 })
-	local best, bestDist = sSnap, (sSnap - eSnap).Magnitude
-	local iters   = 0
-	local maxIter = 600
-	while #open > 0 and iters < maxIter do
-		iters = iters + 1
-		table.sort(open, function(a,b) return a.f < b.f end)
-		local cur = table.remove(open, 1)
-		local cp  = cur.pos
-		local ck  = cp.X.."_"..cp.Y.."_"..cp.Z
-		if closed[ck] then continue end
-		closed[ck] = true
-		local d = (cp - eSnap).Magnitude
-		if d < bestDist then bestDist = d; best = cp end
-		if d < cell * 1.5 or _clearWide(cp, endPos, radius) then best = cp; break end
-		for _, dir in ipairs(DIRS) do
-			local nb  = snap(cp + dir * cell)
-			local nk  = nb.X.."_"..nb.Y.."_"..nb.Z
-			if closed[nk] then continue end
-			local yDiff = nb.Y - startPos.Y
-			if yDiff < -4 or yDiff > (up > 0 and up+8 or 40) then continue end
-			if blocked(nb) then continue end
-			local ng = cur.g + (dir * cell).Magnitude
-			if not gScore[nk] or ng < gScore[nk] then
-				gScore[nk] = ng
-				parent[nk] = ck
-				parent[nk.."_pos"] = nb
-				parent[ck.."_pos"] = cp
-				table.insert(open, { pos = nb, f = ng + heur(nb, eSnap), g = ng })
-			end
-		end
-	end
-	local path  = {}
-	local cur   = best
-	local ck    = cur.X.."_"..cur.Y.."_"..cur.Z
-	local limit = 300
-	while ck and limit > 0 do
-		limit = limit - 1
-		table.insert(path, 1, cur)
-		local pk = parent[ck]
-		if not pk then break end
-		cur = parent[pk.."_pos"]
-		if not cur then break end
-		ck = pk
-	end
-	if #path == 0 then
-		path = { startPos, endPos }
-	else
-		path[1]       = startPos
-		path[#path+1] = endPos
-	end
-	local smooth = { path[1] }
-	local i = 1
-	while i < #path do
-		local nextVis = i + 1
-		for j = #path, i+2, -1 do
-			if _clearWide(smooth[#smooth], path[j], radius) then nextVis = j; break end
-		end
-		table.insert(smooth, path[nextVis])
-		i = nextVis
-	end
-	return smooth
+	return false
 end
 
-local function computeRoute(startPos, targetPos, facingDir, upHint)
-	if _G.SMKTDirect ~= false and _clearWide(startPos, targetPos, tonumber(_G.SMKTPathRadius) or 2.5) then
+local function _findRowDetour(fromPos, toPos, y)
+	local iFrom, iTo = _nearestBase(fromPos), _nearestBase(toPos)
+	if not _segmentHitsOtherBase(fromPos, toPos, iFrom, iTo) then return nil end
+	local colX = BASES_LOW[iTo or 1].X
+	local off  = _rowLane()
+	local lanes = {}
+	local outer = (colX < -410) and (colX - off) or (colX + off)
+	lanes[#lanes + 1] = outer
+	local inner = (colX < -410) and (colX + off) or (colX - off)
+	if not _inCenterZone(inner, (fromPos.Z + toPos.Z) * 0.5) then
+		lanes[#lanes + 1] = inner
+	end
+	local best, bestLen = nil, math.huge
+	for _, laneX in ipairs(lanes) do
+		local w1 = Vector3.new(laneX, y, fromPos.Z)
+		local w2 = Vector3.new(laneX, y, toPos.Z)
+		if _clearWide(fromPos, w1) and _clearWide(w1, w2) and _clearWide(w2, toPos)
+			and not _segmentHitsOtherBase(w1, w2, iFrom, iTo) then
+			local len = (fromPos - w1).Magnitude + (w1 - w2).Magnitude + (w2 - toPos).Magnitude
+			if len < bestLen then bestLen = len; best = { w1, w2 } end
+		end
+	end
+	return best
+end
+
+local _navPath = PathfindingService:CreatePath({
+	AgentRadius = 16, AgentHeight = 5, AgentCanJump = true, AgentJumpHeight = 10, AgentMaxSlope = 89,
+})
+
+local function _appendWp(out, p)
+	if not p then return end
+	if #out == 0 or (out[#out] - p).Magnitude > 1.5 then
+		out[#out + 1] = p
+	end
+end
+
+local function _pfsAround(a, b)
+	do
+		_navPath:ComputeAsync(a, Vector3.new(b.X, a.Y, b.Z))
+	end
+	if _navPath.Status ~= Enum.PathStatus.Success then return nil end
+	local out = {}
+	local last = a
+	for _, wp in ipairs(_navPath:GetWaypoints()) do
+		local p = wp.Position + Vector3.new(0, 5, 0)
+		if (p - last).Magnitude >= 6 then
+			out[#out + 1] = p
+			last = p
+		end
+	end
+	if #out == 0 then return nil end
+	return out
+end
+
+local function _routeClear(pts)
+	if not pts or #pts < 2 then return false end
+	for i = 1, #pts - 1 do
+		local a, b = pts[i], pts[i + 1]
+		if (a - b).Magnitude > 0.5 and not _clearWide(a, b) then return false end
+	end
+	return true
+end
+
+local function _detourAround(a, b)
+	local vr = voxelRoute(a, b)
+	if vr and #vr > 0 and _routeClear(vr) then return vr end
+	local nav = _pfsAround(a, b)
+	if nav and #nav > 0 then
+		_appendWp(nav, b)
+		nav = _pushOffWalls(nav)
+		if _routeClear(nav) then return nav end
+	end
+	return nil
+end
+
+local function _repairBlockedRoute(pts, dest)
+	if not pts or #pts == 0 then pts = { dest } end
+	if (pts[#pts] - dest).Magnitude > 0.5 then
+		local copy = {}
+		for i = 1, #pts do copy[i] = pts[i] end
+		copy[#copy + 1] = dest
+		pts = copy
+	end
+	local out = { pts[1] }
+	local n = #pts
+	for i = 2, n do
+		local a, b = out[#out], pts[i]
+		local sA = (#out == 1) and _ENDPOINT_SLACK or 0
+		local sB = (i == n) and _ENDPOINT_SLACK or 0
+		if (a - b).Magnitude < 1.5 or _clearWide(a, b, sA, sB) then
+			_appendWp(out, b)
+		else
+			local det = _detourAround(a, b)
+			if det then
+				for _, p in ipairs(det) do _appendWp(out, p) end
+			end
+			_appendWp(out, b)
+		end
+	end
+	return out
+end
+
+local function _crestClear(a, b)
+	if not _clear(a, b) then return false end
+	local cl = 6
+	local d = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+	if d.Magnitude < 0.1 then return true end
+	local perp = Vector3.new(-d.Z, 0, d.X).Unit * cl
+	return _clearWideRay(a + perp, b + perp)
+		and _clearWideRay(a - perp, b - perp)
+		and _clearWideRay(a + Vector3.new(0, cl, 0), b + Vector3.new(0, cl, 0))
+end
+
+local _hopRP = RaycastParams.new()
+_hopRP.FilterType = Enum.RaycastFilterType.Exclude
+
+local function _partTopY(inst)
+	local ok, t = true, (function()
+		local cf, sz = inst.CFrame, inst.Size
+		local half = (math.abs(cf.RightVector.Y) * sz.X
+			+ math.abs(cf.UpVector.Y) * sz.Y
+			+ math.abs(cf.LookVector.Y) * sz.Z) / 2
+		return cf.Position.Y + half
+	end)()
+	if ok and t then return t end
+	return inst.Position.Y + (inst.Size.Y / 2)
+end
+
+local function _hopBlockerTop(a, b)
+	local ignore = { LP.Character }
+	for _, cl in ipairs(_OTHER_CLONES) do ignore[#ignore + 1] = cl end
+	local top = nil
+	for _ = 1, 10 do
+		_hopRP.FilterDescendantsInstances = ignore
+		local r = workspace:Raycast(a, b - a, _hopRP)
+		if not r then break end
+		if _blocks(r.Instance) then
+			local t = _partTopY(r.Instance)
+			if not top or t > top then top = t end
+		end
+		ignore[#ignore + 1] = r.Instance
+	end
+	return top
+end
+
+local function _hopRoute(fromPos, toPos)
+	local flat = Vector3.new(toPos.X - fromPos.X, 0, toPos.Z - fromPos.Z)
+	local dist = flat.Magnitude
+	if dist < 8 then return nil end
+	local dir = flat.Unit
+	local step = 8
+	local clear = 4
+	local maxUp = 22
+	local groundY = fromPos.Y
+	local route = {}
+	local inHop, hopY = false, nil
+	local i = step
+	while i <= dist do
+		local a = fromPos + dir * (i - step)
+		local b = fromPos + dir * math.min(i, dist)
+		local ga = Vector3.new(a.X, groundY, a.Z)
+		local gb = Vector3.new(b.X, groundY, b.Z)
+		if not _clear(ga, gb) then
+			local top = _hopBlockerTop(ga, gb) or (groundY + 6)
+			local want = top + clear
+			if want - groundY > maxUp then return nil end
+			if not inHop then
+				inHop, hopY = true, want
+				route[#route + 1] = Vector3.new(a.X, want, a.Z)
+			elseif want > hopY then
+				hopY = want
+				route[#route + 1] = Vector3.new(a.X, want, a.Z)
+			end
+		elseif inHop then
+			inHop = false
+			route[#route + 1] = Vector3.new(b.X, hopY, b.Z)
+			route[#route + 1] = gb
+		end
+		i = i + step
+	end
+	if inHop then
+		route[#route + 1] = Vector3.new(toPos.X, hopY, toPos.Z)
+	end
+	route[#route + 1] = toPos
+	return route
+end
+
+function computeRoute(startPos, targetPos, facingDir, upHint)
+	if _G.SMKTDirect ~= false and _clearWide(startPos, targetPos) then
 		return { startPos, targetPos }
 	end
-	return voxelRoute(startPos, targetPos, upHint)
+	local fromPos, toPos = startPos, targetPos
+	local centerPatch = nil
+	if _segmentCrossesCenter(fromPos, toPos) and not _clearWide(fromPos, toPos) then
+		centerPatch = _findBestCenterDetour(fromPos, toPos, fromPos.Y)
+		if centerPatch and #centerPatch > 0 then
+			fromPos = centerPatch[#centerPatch]
+		end
+	end
+	local rowPatch = _findRowDetour(fromPos, toPos, fromPos.Y)
+	if rowPatch and #rowPatch > 0 then
+		fromPos = rowPatch[#rowPatch]
+	end
+	local function _withPatch(route)
+		if (not centerPatch or #centerPatch == 0) and (not rowPatch or #rowPatch == 0) then return route end
+		local merged = {}
+		if centerPatch then for _, p in ipairs(centerPatch) do merged[#merged + 1] = p end end
+		if rowPatch then for _, p in ipairs(rowPatch) do merged[#merged + 1] = p end end
+		for _, p in ipairs(route) do merged[#merged + 1] = p end
+		return merged
+	end
+	if _clearWide(fromPos, toPos) then return _withPatch({ toPos }) end
+	if (tonumber(_G.SMKTPathCell) or 4) >= 4 then
+		local cruiseY = math.max(fromPos.Y, toPos.Y, 26) + 12
+		local up = Vector3.new(fromPos.X, cruiseY, fromPos.Z)
+		local over = Vector3.new(toPos.X, cruiseY, toPos.Z)
+		local crest = { fromPos, up, over, toPos }
+		local ok = true
+		for i = 1, #crest - 1 do
+			local a, b = crest[i], crest[i + 1]
+			if (a - b).Magnitude > 0.5 then
+				local sA = (i == 1) and _ENDPOINT_SLACK or 0
+				local sB = (i == #crest - 1) and _ENDPOINT_SLACK or 0
+				if not _clearWide(a, b, sA, sB) then ok = false; break end
+			end
+		end
+		if ok then return _withPatch(crest) end
+	end
+	local vr = voxelRoute(fromPos, toPos)
+	if vr and #vr > 0 then return _withPatch(vr) end
+	local entry = facingDir and (toPos - facingDir * 14) or toPos
+	local best, bestLen = nil, math.huge
+	local function consider(pts)
+		if not pts or #pts < 2 then return end
+		local n = #pts
+		for i = 1, n - 1 do
+			local a, b = pts[i], pts[i + 1]
+			if (a - b).Magnitude > 0.5 then
+				local sA = (i == 1) and _ENDPOINT_SLACK or 0
+				local sB = (i == n - 1) and _ENDPOINT_SLACK or 0
+				if not _clearWide(a, b, sA, sB) then return end
+			end
+		end
+		local pulled = _pullWide(pts)
+		local L = _len(pulled)
+		if L < bestLen then best, bestLen = pulled, L end
+	end
+	local dirF = Vector3.new(entry.X - fromPos.X, 0, entry.Z - fromPos.Z)
+	if dirF.Magnitude > 0.1 then
+		dirF = dirF.Unit
+		local perp = Vector3.new(-dirF.Z, 0, dirF.X)
+		local midBase = (fromPos + entry) * 0.5
+		for _, off in ipairs({ 14, -14, 24, -24, 38, -38, 56, -56, 76, -76 }) do
+			consider({ fromPos, midBase + perp * off, entry })
+			consider({ fromPos, fromPos + perp * off, entry + perp * off, entry })
+		end
+	end
+	if not best then
+		local groundTo = Vector3.new(entry.X, fromPos.Y, entry.Z)
+		local path = PathfindingService:CreatePath({
+			AgentRadius = 16, AgentHeight = 5, AgentCanJump = true, AgentJumpHeight = 10, AgentMaxSlope = 89,
+		})
+		local FLOAT = 5
+		local nav = { fromPos }
+		local ok = true; local success
+		pcall(function() path:ComputeAsync(Vector3.new(fromPos.X, fromPos.Y, fromPos.Z), groundTo); success = true end)
+		if ok and success and path.Status == Enum.PathStatus.Success then
+			local last = fromPos
+			for _, wp in ipairs(path:GetWaypoints()) do
+				if (wp.Position - last).Magnitude >= 8 then
+					nav[#nav + 1] = wp.Position + Vector3.new(0, FLOAT, 0)
+					last = wp.Position
+				end
+			end
+		end
+		nav[#nav + 1] = entry + Vector3.new(0, FLOAT, 0)
+		nav = _pushOffWalls(nav)
+		consider(nav)
+	end
+	local route = best
+	if not route and _clear(fromPos, toPos) then route = { toPos } end
+	if not route then route = { toPos } end
+	if (route[#route] - toPos).Magnitude > 0.5 then
+		route[#route + 1] = toPos
+	end
+	return _withPatch(route)
+end
+
 end
 
 local function _climbCap(hrp, targetY)
