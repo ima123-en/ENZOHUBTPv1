@@ -77,7 +77,6 @@ _G.SMKTNoAnim             = true
 _G.ApproachFloor2FromFloor1 = false
 _G.AutoRecoverLagback     = true
 _G.SMKTBrainrotSpeed      = _G.SMKTBrainrotSpeed or 200
-
 _G.SMKTJumpRefreshEnabled  = true
 _G.SMKTJumpRefreshInterval = 0.5
 
@@ -299,164 +298,6 @@ local function stabilize(hum)
 	end)
 end
 
-local function _muteAndStopPull(tool, hrp)
-	if tool then
-		for _, s in ipairs(tool:GetDescendants()) do
-			if s:IsA("Sound") then
-				pcall(function() s.Volume = 0; s:Stop() end)
-			elseif s:IsA("Beam") then
-				pcall(function() s.Enabled = false; s.Attachment0 = nil end)
-			end
-		end
-	end
-	if hrp then
-		local fp = hrp:FindFirstChild("FlightPower")
-		if fp then fp:Destroy() end
-		if not _G.SMKTIsTeleporting then
-			pcall(function()
-				hrp.AssemblyLinearVelocity  = Vector3.zero
-				hrp.AssemblyAngularVelocity = Vector3.zero
-			end)
-		end
-	end
-end
-
-local function _holdNoPull(tool, hrp, seconds)
-	local t0 = os.clock()
-	local conn
-	conn = RunService.Heartbeat:Connect(function()
-		_muteAndStopPull(tool, hrp)
-		if os.clock() - t0 > seconds then
-			conn:Disconnect()
-			_muteAndStopPull(tool, hrp)
-		end
-	end)
-end
-
-_G.__SMKTGrappleFire = function(tool, pos, alvo, char, RSv)
-	local refs = (getgenv and getgenv().__SMKTPMRefs) or _G.__SMKTPMRefs
-	if not refs then
-		refs = {}
-		pcall(function()
-			local mouse = require((RSv or ReplicatedStorage).Packages.PlayerMouse)
-			if type(mouse) == "table" then refs[1] = mouse end
-		end)
-		if getgenv then getgenv().__SMKTPMRefs = refs end
-		_G.__SMKTPMRefs = refs
-	end
-	local hrp = char and char:FindFirstChild("HumanoidRootPart")
-	_muteAndStopPull(tool, hrp)
-	local mira  = CFrame.new(pos)
-	local antes = {}
-	for i, t in ipairs(refs) do
-		antes[i] = { rawget(t,"Hit"), rawget(t,"Target") }
-		pcall(function() t.Hit = mira; t.Target = alvo end)
-	end
-	local ok = pcall(function() tool:Activate() end)
-	if not ok then ok = pcall(function() firesignal(tool.Activated) end) end
-	_muteAndStopPull(tool, hrp)
-	_holdNoPull(tool, hrp, 0.6)
-	task.spawn(function()
-		for _ = 1, 4 do
-			for _, t in ipairs(refs) do
-				pcall(function() t.Hit = mira; t.Target = alvo end)
-			end
-			_muteAndStopPull(tool, hrp)
-			RunService.Heartbeat:Wait()
-		end
-		for i, t in ipairs(refs) do
-			local a = antes[i]
-			pcall(function() t.Hit = a[1]; t.Target = a[2] end)
-		end
-		_muteAndStopPull(tool, hrp)
-	end)
-	return ok
-end
-
-_G.SMKTFireGrapple = function(value, exato)
-	local eu   = Players.LocalPlayer
-	local char = eu and eu.Character
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-	if not hrp then return false end
-	if eu:GetAttribute("Stealing") then return false end
-	local tool = char:FindFirstChild("Grapple Hook")
-	if not tool then
-		local bp  = eu:FindFirstChildOfClass("Backpack")
-		local t2  = bp and bp:FindFirstChild("Grapple Hook")
-		local hum = char:FindFirstChildOfClass("Humanoid")
-		if not t2 or not hum then return false end
-		pcall(function() hum:EquipTool(t2) end)
-		local t0 = os.clock()
-		repeat
-			RunService.Heartbeat:Wait()
-			char = eu.Character
-			tool = char and char:FindFirstChild("Grapple Hook")
-		until tool or os.clock() - t0 > 0.5
-		if not tool then return false end
-		hrp = char and char:FindFirstChild("HumanoidRootPart")
-		if not hrp then return false end
-	end
-	local par0 = RaycastParams.new()
-	par0.FilterType = Enum.RaycastFilterType.Exclude
-	par0.FilterDescendantsInstances = { char }
-	if exato and typeof(value) == "Vector3" then
-		local pos = value
-		local m = (pos - hrp.Position).Magnitude
-		if m < 10 or m > 50 then return false end
-		local alvo
-		local hit = workspace:Raycast(hrp.Position, pos - hrp.Position, par0)
-		if hit then alvo = hit.Instance end
-		if not alvo then
-			for _, p in ipairs(workspace:GetPartBoundsInRadius(pos, 6)) do
-				if p:IsA("BasePart") and not p:IsDescendantOf(char) then alvo = p; break end
-			end
-		end
-		if not alvo then return false end
-		return _G.__SMKTGrappleFire(tool, pos, alvo, char, ReplicatedStorage)
-	end
-	local destino
-	if typeof(value) == "Vector3" then destino = value
-	elseif typeof(value) == "Instance" and value:IsA("BasePart") then destino = value.Position end
-	local dir
-	if destino then
-		dir = destino - hrp.Position
-		dir = Vector3.new(dir.X, 0, dir.Z)
-	end
-	if not dir or dir.Magnitude < 1 then
-		local lv = hrp.CFrame.LookVector
-		dir = Vector3.new(lv.X, 0, lv.Z)
-	end
-	if dir.Magnitude < 0.01 then return false end
-	dir = dir.Unit
-	local par = RaycastParams.new()
-	par.FilterType = Enum.RaycastFilterType.Exclude
-	par.FilterDescendantsInstances = { char }
-	local pos, alvo, melhorM
-	for _, d in ipairs({ 9,10,11,12,13,14,16,18,21,24,28,32,36,40,45 }) do
-		local origem = hrp.Position + dir * d + Vector3.new(0, 3, 0)
-		local hit = workspace:Raycast(origem, Vector3.new(0,-60,0), par)
-		if hit then
-			local m = (hit.Position - hrp.Position).Magnitude
-			if m >= 10 and m <= 50 and (not melhorM or m < melhorM) then
-				pos, alvo, melhorM = hit.Position, hit.Instance, m
-			end
-		end
-	end
-	if not pos then
-		for _, d in ipairs({ 11,14,18,24,32,42,48 }) do
-			local hit = workspace:Raycast(hrp.Position, dir * d, par)
-			if hit then
-				local m = (hit.Position - hrp.Position).Magnitude
-				if m >= 10 and m <= 50 and (not melhorM or m < melhorM) then
-					pos, alvo, melhorM = hit.Position, hit.Instance, m
-				end
-			end
-		end
-	end
-	if not pos or not alvo then return false end
-	return _G.__SMKTGrappleFire(tool, pos, alvo, char, ReplicatedStorage)
-end
-
 local function _pingMs()
 	local ok, v = pcall(function()
 		return Players.LocalPlayer:GetNetworkPing() * 1000
@@ -472,8 +313,6 @@ local function _pingAdjustSpeed(baseSpeed)
 	end
 	return baseSpeed
 end
-
-do
 
 local _OTHER_CLONES = {}
 local PathfindingService = game:GetService("PathfindingService")
@@ -1308,154 +1147,162 @@ function computeRoute(startPos, targetPos, facingDir, upHint)
 	return _withPatch(route)
 end
 
-end
-
-local function _climbCap(hrp, targetY)
-	if _G.SMKTClimbFull == true then return tonumber(_G.SMKTClimb) or 160 end
-	local diff = targetY - hrp.Position.Y
-	if diff > 2 then
-		local safe = tonumber(_G.SMKTClimbSafe) or 250
-		local full = tonumber(_G.SMKTClimb) or 160
-		return diff > 8 and full or safe
+local function _muteAndStopPull(tool, hrp)
+	if tool then
+		for _, s in ipairs(tool:GetDescendants()) do
+			if s:IsA("Sound") then
+				pcall(function() s.Volume = 0; s:Stop() end)
+			elseif s:IsA("Beam") then
+				pcall(function() s.Enabled = false; s.Attachment0 = nil end)
+			end
+		end
 	end
-	return tonumber(_G.SMKTClimb) or 160
+	if hrp then
+		local fp = hrp:FindFirstChild("FlightPower")
+		if fp then fp:Destroy() end
+		if not _G.SMKTIsTeleporting then
+			pcall(function()
+				hrp.AssemblyLinearVelocity  = Vector3.zero
+				hrp.AssemblyAngularVelocity = Vector3.zero
+			end)
+		end
+	end
 end
 
-local function smktVelMove(hrp, waypoints, speedOverride)
-	if not hrp or not hrp.Parent or #waypoints == 0 then return function() end end
-	local done      = false
-	local wpIdx     = 1
+local function _holdNoPull(tool, hrp, seconds)
+	local t0 = os.clock()
 	local conn
-	local ARRIVE    = 3.5
-	local stallSec  = tonumber(_G.SMKTStallSec) or 0.6
-	local repushAt  = tonumber(_G.SMKTRepushAt) or 0.9
-	local lastDist  = math.huge
-	local stallT    = os.clock()
-	local baseSpeed = _pingAdjustSpeed(speedOverride or tonumber(_G.TPVelocity) or 400)
-
-	local jumpEnabled  = _G.SMKTJumpRefreshEnabled ~= false
-	local jumpInterval = tonumber(_G.SMKTJumpRefreshInterval) or 0.5
-	local lastJumpT    = os.clock()
-
-	equipCarpet()
-	local function hardStop()
-		if done then return end
-		done = true
-		if conn then conn:Disconnect() end
-		if hrp and hrp.Parent then vZero(hrp) end
-	end
 	conn = RunService.Heartbeat:Connect(function()
-		if done then return end
-		if not isAlive() then _G.TPStatus = "player_died_aborted"; hardStop(); return end
-		local hum = hrp.Parent and hrp.Parent:FindFirstChildOfClass("Humanoid")
-		local target = waypoints[wpIdx]
-		local diff   = target - hrp.Position
-		local mag    = diff.Magnitude
-		if mag < lastDist - 0.1 then lastDist = mag; stallT = os.clock()
-		else
-			local se = os.clock() - stallT
-			if se > repushAt then vZero(hrp); equipCarpet(); stallT = os.clock(); lastDist = math.huge end
-			if se > stallSec then _G.TPStatus = "stall_aborted"; hardStop(); return end
-		end
-		if mag < ARRIVE then
-			wpIdx = wpIdx + 1
-			if wpIdx > #waypoints then hardStop(); return end
-			target = waypoints[wpIdx]; diff = target - hrp.Position; mag = diff.Magnitude
-			lastDist = math.huge; stallT = os.clock(); equipCarpet()
-		end
-		if mag >= 0.1 then
-			local dir = diff.Unit
-			local spd = baseSpeed
-			if diff.Y > 2 then spd = math.min(spd, _climbCap(hrp, target.Y) + math.abs(diff.Y)*8) end
-			if wpIdx == #waypoints and mag < 12 then
-				spd = math.max(tonumber(_G.SMKTCloseSpeed) or 80, spd * (mag/12))
-			end
-			if jumpEnabled and hum and (os.clock() - lastJumpT) >= jumpInterval then
-				lastJumpT = os.clock()
-				pcall(function()
-					hum:ChangeState(Enum.HumanoidStateType.Jumping)
-					hum.Jump = true
-				end)
-			end
-			hrp.AssemblyLinearVelocity = dir * spd
-			stabilize(hum)
+		_muteAndStopPull(tool, hrp)
+		if os.clock() - t0 > seconds then
+			conn:Disconnect()
+			_muteAndStopPull(tool, hrp)
 		end
 	end)
-	return hardStop
 end
 
-local function getPrioritySelected()
-	local PS = getgenv and getgenv().PrioritySystem
-	if PS then
-		if type(PS.GetSelected) == "function" then
-			local sel = PS.GetSelected()
-			if sel then return sel end
+_G.__SMKTGrappleFire = function(tool, pos, alvo, char, RSv)
+	local refs = (getgenv and getgenv().__SMKTPMRefs) or _G.__SMKTPMRefs
+	if not refs then
+		refs = {}
+		pcall(function()
+			local mouse = require((RSv or ReplicatedStorage).Packages.PlayerMouse)
+			if type(mouse) == "table" then refs[1] = mouse end
+		end)
+		if getgenv then getgenv().__SMKTPMRefs = refs end
+		_G.__SMKTPMRefs = refs
+	end
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	_muteAndStopPull(tool, hrp)
+	local mira  = CFrame.new(pos)
+	local antes = {}
+	for i, t in ipairs(refs) do
+		antes[i] = { rawget(t,"Hit"), rawget(t,"Target") }
+		pcall(function() t.Hit = mira; t.Target = alvo end)
+	end
+	local ok = pcall(function() tool:Activate() end)
+	if not ok then ok = pcall(function() firesignal(tool.Activated) end) end
+	_muteAndStopPull(tool, hrp)
+	_holdNoPull(tool, hrp, 0.6)
+	task.spawn(function()
+		for _ = 1, 4 do
+			for _, t in ipairs(refs) do
+				pcall(function() t.Hit = mira; t.Target = alvo end)
+			end
+			_muteAndStopPull(tool, hrp)
+			RunService.Heartbeat:Wait()
 		end
-		if PS.SelectedData then return PS.SelectedData end
-	end
-	local tgt = _G.SMKTStealTarget or _G.SabcomStealTarget
-	if type(tgt) == "table" then return tgt end
-	return nil
+		for i, t in ipairs(refs) do
+			local a = antes[i]
+			pcall(function() t.Hit = a[1]; t.Target = a[2] end)
+		end
+		_muteAndStopPull(tool, hrp)
+	end)
+	return ok
 end
 
-local function getBrainrotPos(sel)
-	if not sel then return nil end
-	if sel.worldPosition then return sel.worldPosition end
-	if sel.pos then sel.worldPosition = sel.pos; return sel.pos end
-	if sel.position and typeof(sel.position) == "Vector3" then
-		sel.worldPosition = sel.position; return sel.position
+_G.SMKTFireGrapple = function(value, exato)
+	local eu   = Players.LocalPlayer
+	local char = eu and eu.Character
+	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return false end
+	if eu:GetAttribute("Stealing") then return false end
+	local tool = char:FindFirstChild("Grapple Hook")
+	if not tool then
+		local bp  = eu:FindFirstChildOfClass("Backpack")
+		local t2  = bp and bp:FindFirstChild("Grapple Hook")
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if not t2 or not hum then return false end
+		pcall(function() hum:EquipTool(t2) end)
+		local t0 = os.clock()
+		repeat
+			RunService.Heartbeat:Wait()
+			char = eu.Character
+			tool = char and char:FindFirstChild("Grapple Hook")
+		until tool or os.clock() - t0 > 0.5
+		if not tool then return false end
+		hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if not hrp then return false end
 	end
-	local plots = Workspace:FindFirstChild("Plots")
-	if plots and sel.plot and sel.slot then
-		local plot    = plots:FindFirstChild(sel.plot)
-		local podiums = plot and plot:FindFirstChild("AnimalPodiums")
-		local podium  = podiums and podiums:FindFirstChild(tostring(sel.slot))
-		if podium then
-			local ok, cf = pcall(function() return podium:GetPivot() end)
-			if ok then sel.worldPosition = cf.Position; return cf.Position end
+	local par0 = RaycastParams.new()
+	par0.FilterType = Enum.RaycastFilterType.Exclude
+	par0.FilterDescendantsInstances = { char }
+	if exato and typeof(value) == "Vector3" then
+		local pos = value
+		local m = (pos - hrp.Position).Magnitude
+		if m < 10 or m > 50 then return false end
+		local alvo
+		local hit = workspace:Raycast(hrp.Position, pos - hrp.Position, par0)
+		if hit then alvo = hit.Instance end
+		if not alvo then
+			for _, p in ipairs(workspace:GetPartBoundsInRadius(pos, 6)) do
+				if p:IsA("BasePart") and not p:IsDescendantOf(char) then alvo = p; break end
+			end
+		end
+		if not alvo then return false end
+		return _G.__SMKTGrappleFire(tool, pos, alvo, char, ReplicatedStorage)
+	end
+	local destino
+	if typeof(value) == "Vector3" then destino = value
+	elseif typeof(value) == "Instance" and value:IsA("BasePart") then destino = value.Position end
+	local dir
+	if destino then
+		dir = destino - hrp.Position
+		dir = Vector3.new(dir.X, 0, dir.Z)
+	end
+	if not dir or dir.Magnitude < 1 then
+		local lv = hrp.CFrame.LookVector
+		dir = Vector3.new(lv.X, 0, lv.Z)
+	end
+	if dir.Magnitude < 0.01 then return false end
+	dir = dir.Unit
+	local par = RaycastParams.new()
+	par.FilterType = Enum.RaycastFilterType.Exclude
+	par.FilterDescendantsInstances = { char }
+	local pos, alvo, melhorM
+	for _, d in ipairs({ 9,10,11,12,13,14,16,18,21,24,28,32,36,40,45 }) do
+		local origem = hrp.Position + dir * d + Vector3.new(0, 3, 0)
+		local hit = workspace:Raycast(origem, Vector3.new(0,-60,0), par)
+		if hit then
+			local m = (hit.Position - hrp.Position).Magnitude
+			if m >= 10 and m <= 50 and (not melhorM or m < melhorM) then
+				pos, alvo, melhorM = hit.Position, hit.Instance, m
+			end
 		end
 	end
-	if sel.model and sel.model.Parent then
-		local part = sel.model.PrimaryPart
-			or sel.model:FindFirstChild("HumanoidRootPart")
-			or sel.model:FindFirstChildWhichIsA("BasePart")
-		if part then sel.worldPosition = part.Position; return part.Position end
-		local ok, cf = pcall(function() return sel.model:GetPivot() end)
-		if ok and cf then sel.worldPosition = cf.Position; return cf.Position end
+	if not pos then
+		for _, d in ipairs({ 11,14,18,24,32,42,48 }) do
+			local hit = workspace:Raycast(hrp.Position, dir * d, par)
+			if hit then
+				local m = (hit.Position - hrp.Position).Magnitude
+				if m >= 10 and m <= 50 and (not melhorM or m < melhorM) then
+					pos, alvo, melhorM = hit.Position, hit.Instance, m
+				end
+			end
+		end
 	end
-	return nil
-end
-
-local function getBaseIdx(pos)
-	local closest, dist = 1, math.huge
-	for i = 1, 8 do
-		local b = BASES_LOW[i]
-		local d = (pos.X-b.X)^2 + (pos.Z-b.Z)^2
-		if d < dist then dist = d; closest = i end
-	end
-	return closest
-end
-
-local function isSecondFloor(pos) return pos and pos.Y >= 8.0 and pos.Y <= 11.0 end
-local function isThirdFloor(pos)  return pos and pos.Y > 20 end
-
-local function getBaseEntry(idx, isUpper, playerZ)
-	local base    = isUpper and BASES_HIGH[idx] or BASES_LOW[idx]
-	local frontZ  = math.clamp(playerZ - base.Z, -18, 18) + base.Z
-	local coord   = Vector3.new(base.X, isUpper and 16.85 or -3.04, frontZ)
-	local faceDir = (idx <= 4) and Vector3.new(-1,0,0) or Vector3.new(1,0,0)
-	return { pos = coord, look = faceDir }
-end
-
-local function EquipToolLP(name)
-	local char = LP.Character
-	if not char then return nil end
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	if not hum then return nil end
-	local bp   = LP:FindFirstChild("Backpack")
-	local tool = char:FindFirstChild(name) or (bp and bp:FindFirstChild(name))
-	if tool then hum:UnequipTools(); task.wait(0.02); hum:EquipTool(tool) end
-	return tool
+	if not pos or not alvo then return false end
+	return _G.__SMKTGrappleFire(tool, pos, alvo, char, ReplicatedStorage)
 end
 
 local _quantumTeleportRemote = nil
@@ -1483,9 +1330,15 @@ local function placeCloneOnly()
 	local hrp = char:FindFirstChild("HumanoidRootPart")
 	if not hum or not hrp then return false end
 	stabilize(hum); vZero(hrp)
-	local cloner = EquipToolLP("Quantum Cloner")
+	local cloner = nil
+	local bp = LP:FindFirstChild("Backpack")
+	if bp then cloner = bp:FindFirstChild("Quantum Cloner") end
+	if not cloner then cloner = char:FindFirstChild("Quantum Cloner") end
 	if not cloner then return false end
-	task.wait(0.15)
+	if cloner.Parent ~= char then
+		pcall(function() hum:EquipTool(cloner) end)
+		task.wait(0.15)
+	end
 	local ok = pcall(function() cloner:Activate() end)
 	if not ok then pcall(function() firesignal(cloner.Activated) end) end
 	local cloneName = tostring(LP.UserId) .. "_Clone"
@@ -1574,6 +1427,152 @@ local function doClone()
 	return success
 end
 
+local function getPrioritySelected()
+	local PS = getgenv and getgenv().PrioritySystem
+	if PS then
+		if type(PS.GetSelected) == "function" then
+			local sel = PS.GetSelected()
+			if sel then return sel end
+		end
+		if PS.SelectedData then return PS.SelectedData end
+	end
+	local tgt = _G.SMKTStealTarget or _G.SabcomStealTarget
+	if type(tgt) == "table" then return tgt end
+	return nil
+end
+
+local function getBrainrotPos(sel)
+	if not sel then return nil end
+	if sel.worldPosition then return sel.worldPosition end
+	if sel.pos then sel.worldPosition = sel.pos; return sel.pos end
+	if sel.position and typeof(sel.position) == "Vector3" then
+		sel.worldPosition = sel.position; return sel.position
+	end
+	local plots = Workspace:FindFirstChild("Plots")
+	if plots and sel.plot and sel.slot then
+		local plot    = plots:FindFirstChild(sel.plot)
+		local podiums = plot and plot:FindFirstChild("AnimalPodiums")
+		local podium  = podiums and podiums:FindFirstChild(tostring(sel.slot))
+		if podium then
+			local ok, cf = pcall(function() return podium:GetPivot() end)
+			if ok then sel.worldPosition = cf.Position; return cf.Position end
+		end
+	end
+	if sel.model and sel.model.Parent then
+		local part = sel.model.PrimaryPart
+			or sel.model:FindFirstChild("HumanoidRootPart")
+			or sel.model:FindFirstChildWhichIsA("BasePart")
+		if part then sel.worldPosition = part.Position; return part.Position end
+		local ok, cf = pcall(function() return sel.model:GetPivot() end)
+		if ok and cf then sel.worldPosition = cf.Position; return cf.Position end
+	end
+	return nil
+end
+
+local function getBaseIdx(pos)
+	local closest, dist = 1, math.huge
+	for i = 1, 8 do
+		local b = BASES_LOW[i]
+		local d = (pos.X-b.X)^2 + (pos.Z-b.Z)^2
+		if d < dist then dist = d; closest = i end
+	end
+	return closest
+end
+
+local function isSecondFloor(pos) return pos and pos.Y >= 8.0 and pos.Y <= 11.0 end
+local function isThirdFloor(pos)  return pos and pos.Y > 20 end
+
+local function getBaseEntry(idx, isUpper, playerZ)
+	local base    = isUpper and BASES_HIGH[idx] or BASES_LOW[idx]
+	local frontZ  = math.clamp(playerZ - base.Z, -18, 18) + base.Z
+	local coord   = Vector3.new(base.X, isUpper and 16.85 or -3.04, frontZ)
+	local faceDir = (idx <= 4) and Vector3.new(-1,0,0) or Vector3.new(1,0,0)
+	return { pos = coord, look = faceDir }
+end
+
+local function playPrioritySound()
+	if not Config.TpSettings.PrioritySound then return end
+	local idNum = (Config.TpSettings.PrioritySoundID or "94302001673909"):match("%d+")
+	if not idNum then return end
+	local s = Instance.new("Sound")
+	s.SoundId="rbxassetid://"..idNum; s.Volume=1; s.Parent=SoundService; s:Play()
+	game:GetService("Debris"):AddItem(s, 6)
+end
+
+local function _climbCap(hrp, targetY)
+	if _G.SMKTClimbFull == true then return tonumber(_G.SMKTClimb) or 160 end
+	local diff = targetY - hrp.Position.Y
+	if diff > 2 then
+		local safe = tonumber(_G.SMKTClimbSafe) or 250
+		local full = tonumber(_G.SMKTClimb) or 160
+		return diff > 8 and full or safe
+	end
+	return tonumber(_G.SMKTClimb) or 160
+end
+
+local function smktVelMove(hrp, waypoints, speedOverride)
+	if not hrp or not hrp.Parent or #waypoints == 0 then return function() end end
+	local done      = false
+	local wpIdx     = 1
+	local conn
+	local ARRIVE    = 3.5
+	local stallSec  = tonumber(_G.SMKTStallSec) or 0.6
+	local repushAt  = tonumber(_G.SMKTRepushAt) or 0.9
+	local lastDist  = math.huge
+	local stallT    = os.clock()
+	local baseSpeed = _pingAdjustSpeed(speedOverride or tonumber(_G.TPVelocity) or 400)
+
+	local jumpEnabled  = _G.SMKTJumpRefreshEnabled ~= false
+	local jumpInterval = tonumber(_G.SMKTJumpRefreshInterval) or 0.5
+	local lastJumpT    = os.clock()
+
+	equipCarpet()
+	local function hardStop()
+		if done then return end
+		done = true
+		if conn then conn:Disconnect() end
+		if hrp and hrp.Parent then vZero(hrp) end
+	end
+	conn = RunService.Heartbeat:Connect(function()
+		if done then return end
+		if not isAlive() then _G.TPStatus = "player_died_aborted"; hardStop(); return end
+		local hum = hrp.Parent and hrp.Parent:FindFirstChildOfClass("Humanoid")
+		local target = waypoints[wpIdx]
+		local diff   = target - hrp.Position
+		local mag    = diff.Magnitude
+		if mag < lastDist - 0.1 then lastDist = mag; stallT = os.clock()
+		else
+			local se = os.clock() - stallT
+			if se > repushAt then vZero(hrp); equipCarpet(); stallT = os.clock(); lastDist = math.huge end
+			if se > stallSec then _G.TPStatus = "stall_aborted"; hardStop(); return end
+		end
+		if mag < ARRIVE then
+			wpIdx = wpIdx + 1
+			if wpIdx > #waypoints then hardStop(); return end
+			target = waypoints[wpIdx]; diff = target - hrp.Position; mag = diff.Magnitude
+			lastDist = math.huge; stallT = os.clock(); equipCarpet()
+		end
+		if mag >= 0.1 then
+			local dir = diff.Unit
+			local spd = baseSpeed
+			if diff.Y > 2 then spd = math.min(spd, _climbCap(hrp, target.Y) + math.abs(diff.Y)*8) end
+			if wpIdx == #waypoints and mag < 12 then
+				spd = math.max(tonumber(_G.SMKTCloseSpeed) or 80, spd * (mag/12))
+			end
+			if jumpEnabled and hum and (os.clock() - lastJumpT) >= jumpInterval then
+				lastJumpT = os.clock()
+				pcall(function()
+					hum:ChangeState(Enum.HumanoidStateType.Jumping)
+					hum.Jump = true
+				end)
+			end
+			hrp.AssemblyLinearVelocity = dir * spd
+			stabilize(hum)
+		end
+	end)
+	return hardStop
+end
+
 local function goToBrainrot(brainPos, selRef)
 	if not brainPos then return end
 	local char = LP.Character
@@ -1582,13 +1581,13 @@ local function goToBrainrot(brainPos, selRef)
 	if not hrp or not hum then return end
 	equipCarpet(); vZero(hrp); stabilize(hum)
 
-	local needsHover = isThirdFloor(brainPos)
-		or (isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2)
+	local needsHover = (brainPos.Y > 20)
+		or (brainPos.Y >= 8.0 and brainPos.Y <= 11.0 and Config.TpSettings.TpFloor1WhenFloor2)
 
 	local targetPos
-	if isThirdFloor(brainPos) then
+	if brainPos.Y > 20 then
 		targetPos = Vector3.new(brainPos.X, brainPos.Y-5, brainPos.Z)
-	elseif isSecondFloor(brainPos) and Config.TpSettings.TpFloor1WhenFloor2 then
+	elseif brainPos.Y >= 8.0 and brainPos.Y <= 11.0 and Config.TpSettings.TpFloor1WhenFloor2 then
 		targetPos = Vector3.new(brainPos.X, brainPos.Y-7, brainPos.Z)
 	else
 		local look = hrp.CFrame.LookVector
@@ -1680,15 +1679,6 @@ local function goToBrainrot(brainPos, selRef)
 			if conn then conn:Disconnect() end
 		end
 	end)
-end
-
-local function playPrioritySound()
-	if not Config.TpSettings.PrioritySound then return end
-	local idNum = (Config.TpSettings.PrioritySoundID or "94302001673909"):match("%d+")
-	if not idNum then return end
-	local s = Instance.new("Sound")
-	s.SoundId="rbxassetid://"..idNum; s.Volume=1; s.Parent=SoundService; s:Play()
-	game:GetService("Debris"):AddItem(s, 6)
 end
 
 local isTeleporting = false
