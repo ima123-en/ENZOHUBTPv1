@@ -1453,23 +1453,19 @@ local function doClone(nearPos)
 			local h = c and c:FindFirstChild("HumanoidRootPart")
 			return h and (h.Position - prePos).Magnitude > 3
 		end
-		local function waitSwap(sec)
-			local t0 = os.clock()
-			while os.clock() - t0 < sec do
-				if swapped() then return true end
-				RunService.Heartbeat:Wait()
-			end
-			return false
-		end
 		local remote = getQuantumTeleportRemote()
 		if remote then
-			pcall(function() remote:FireServer() end)
-			if waitSwap(0.5) then success = true; return end
+			task.spawn(function() pcall(function() remote:FireServer() end) end)
 		end
-		if pressSwapButton() then
-			if waitSwap(0.5) then success = true; return end
+		task.spawn(function() pressSwapButton() end)
+		local t0 = os.clock()
+		while os.clock() - t0 < 0.6 do
+			if swapped() then success = true; return end
+			RunService.Heartbeat:Wait()
 		end
-		success = manualCloneTeleport()
+		if not success then
+			success = manualCloneTeleport()
+		end
 	end)
 	_G._UnifiedIsCloning = false
 	return success
@@ -1902,15 +1898,18 @@ local function _doVelocityTPInner()
 	vZero(hrp)
 	hrp.CFrame = faceCF(destPos)
 
-	local holdT = tonumber(_G.SMKTFixHoldTime) or 0.12
-	local tHold = os.clock()
-	while os.clock() - tHold < holdT do
-		if checkAbort() then return end
-		hrp.CFrame = faceCF(destPos)
-		vZero(hrp)
-		stabilize(hum)
-		RunService.Heartbeat:Wait()
-	end
+-- NEU: Längerer Hold + Physik komplett einfrieren + Lagback-Guard
+local holdT = 0.35
+local tHold = os.clock()
+local frozenCF = faceCF(destPos)
+while os.clock() - tHold < holdT do
+	if checkAbort() then return end
+	hrp.CFrame = frozenCF
+	hrp.AssemblyLinearVelocity  = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	stabilize(hum)
+	RunService.Heartbeat:Wait()
+end
 
 	if _G.SMKTFixJump ~= false then
 		pcall(function()
@@ -1923,22 +1922,22 @@ local function _doVelocityTPInner()
 	if leftDir.Magnitude < 0.01 then leftDir = Vector3.new(0, 0, 1) end
 	leftDir = leftDir.Unit
 	local driftSpd = tonumber(_G.SMKTFixDriftSpeed) or 6
-	local driftT   = tonumber(_G.SMKTFixDriftTime) or 0.3
-	local tDrift   = os.clock()
-	while os.clock() - tDrift < driftT do
-		if checkAbort() then return end
-		local vy = hrp.AssemblyLinearVelocity.Y
-		hrp.AssemblyLinearVelocity  = leftDir * driftSpd + Vector3.new(0, vy, 0)
-		hrp.AssemblyAngularVelocity = Vector3.zero
-		hrp.CFrame = faceCF(hrp.Position)
-		stabilizeSoft(hum)
-		RunService.Heartbeat:Wait()
-	end
-	hrp.AssemblyLinearVelocity  = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-	hrp.AssemblyAngularVelocity = Vector3.zero
-	hrp.CFrame = faceCF(hrp.Position)
-	pcall(function() hum.AutoRotate = true end)
-
+-- NEU: Micro-Drift direkt in Fahrtrichtung (ins Base rein), nicht seitwärts
+local driftT   = tonumber(_G.SMKTFixDriftTime) or 0.25
+local tDrift   = os.clock()
+local inwardSpd = 5  -- leicht ins Base rein statt seitwärts
+while os.clock() - tDrift < driftT do
+    if checkAbort() then return end
+    local vy = hrp.AssemblyLinearVelocity.Y
+    hrp.AssemblyLinearVelocity  = facingDir * inwardSpd + Vector3.new(0, vy, 0)
+    hrp.AssemblyAngularVelocity = Vector3.zero
+    hrp.CFrame = faceCF(hrp.Position)
+    stabilizeSoft(hum)
+    RunService.Heartbeat:Wait()
+end
+hrp.AssemblyLinearVelocity  = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+hrp.AssemblyAngularVelocity = Vector3.zero
+pcall(function() hum.AutoRotate = true end)
 	if checkAbort() then return end
 	if (hrp.Position-destPos).Magnitude > 12 then abort("base_not_reached"); return end
 
