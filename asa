@@ -1448,10 +1448,10 @@ local function doClone(nearPos)
 		if not hrp then return end
 		local prePos = hrp.Position
 		local function swapped()
-			if not cloneAlive() then return true end
 			local c = LP.Character
 			local h = c and c:FindFirstChild("HumanoidRootPart")
-			return h and (h.Position - prePos).Magnitude > 3
+			if not h then return false end
+			return (h.Position - prePos).Magnitude > 3
 		end
 		local remote = getQuantumTeleportRemote()
 		if remote then
@@ -1459,12 +1459,13 @@ local function doClone(nearPos)
 		end
 		task.spawn(function() pressSwapButton() end)
 		local t0 = os.clock()
-		while os.clock() - t0 < 0.6 do
-			if swapped() then success = true; return end
+		while os.clock() - t0 < 1.2 do
+			if swapped() then
+				task.wait(0.05)
+				success = true
+				return
+			end
 			RunService.Heartbeat:Wait()
-		end
-		if not success then
-			success = manualCloneTeleport()
 		end
 	end)
 	_G._UnifiedIsCloning = false
@@ -1821,6 +1822,28 @@ local function _doVelocityTPInner()
 		return false
 	end
 
+	local _lagbackSpeedMult = 1.0
+	local _lastPos = nil
+	local _lastPosT = 0
+	local _lagbackConn
+	_lagbackConn = RunService.Heartbeat:Connect(function()
+		local char = LP.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if not hrp then return end
+		local now = os.clock()
+		local pos = hrp.Position
+		if _lastPos and (now - _lastPosT) > 0.1 then
+			local moved = (pos - _lastPos).Magnitude
+			local vel = hrp.AssemblyLinearVelocity.Magnitude
+			if moved > 8 and vel < 5 then
+				_lagbackSpeedMult = math.max(0.4, _lagbackSpeedMult * 0.9)
+				_G.TPVelocity = math.floor((_G.TPVelocity or 400) * 0.9)
+			end
+		end
+		_lastPos = pos
+		_lastPosT = now
+	end)
+
 	local char = LP.Character
 	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
 	local hum  = char and char:FindFirstChildOfClass("Humanoid")
@@ -1872,8 +1895,7 @@ local function _doVelocityTPInner()
 		route = computeRoute(hrp.Position, destPos, facingDir)
 	end
 
-	local stopMove, mvState = smktVelMove(hrp, route, baseSpeed)
-	local t0 = tick()
+	local stopMove, mvState = smktVelMove(hrp, route, math.floor(baseSpeed * _lagbackSpeedMult))	local t0 = tick()
 	local finalArrive = tonumber(_G.SMKTFinalArrive) or 2.5
 	while tick()-t0 < 10 do
 		if checkAbort() then stopMove(); return end
@@ -1899,17 +1921,17 @@ local function _doVelocityTPInner()
 	hrp.CFrame = faceCF(destPos)
 
 -- NEU: Längerer Hold + Physik komplett einfrieren + Lagback-Guard
-local holdT = 0.35
-local tHold = os.clock()
-local frozenCF = faceCF(destPos)
-while os.clock() - tHold < holdT do
-	if checkAbort() then return end
+	local frozenCF = faceCF(destPos)
 	hrp.CFrame = frozenCF
-	hrp.AssemblyLinearVelocity  = Vector3.zero
-	hrp.AssemblyAngularVelocity = Vector3.zero
+	vZero(hrp)
 	stabilize(hum)
-	RunService.Heartbeat:Wait()
-end
+	task.wait(0.08)
+	hrp.CFrame = frozenCF
+	vZero(hrp)
+	stabilize(hum)
+	task.wait(0.08)
+	hrp.CFrame = frozenCF
+	vZero(hrp)
 
 	if _G.SMKTFixJump ~= false then
 		pcall(function()
@@ -1923,21 +1945,9 @@ end
 	leftDir = leftDir.Unit
 	local driftSpd = tonumber(_G.SMKTFixDriftSpeed) or 6
 -- NEU: Micro-Drift direkt in Fahrtrichtung (ins Base rein), nicht seitwärts
-local driftT   = tonumber(_G.SMKTFixDriftTime) or 0.25
-local tDrift   = os.clock()
-local inwardSpd = 5  -- leicht ins Base rein statt seitwärts
-while os.clock() - tDrift < driftT do
-    if checkAbort() then return end
-    local vy = hrp.AssemblyLinearVelocity.Y
-    hrp.AssemblyLinearVelocity  = facingDir * inwardSpd + Vector3.new(0, vy, 0)
-    hrp.AssemblyAngularVelocity = Vector3.zero
-    hrp.CFrame = faceCF(hrp.Position)
-    stabilizeSoft(hum)
-    RunService.Heartbeat:Wait()
-end
-hrp.AssemblyLinearVelocity  = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-hrp.AssemblyAngularVelocity = Vector3.zero
-pcall(function() hum.AutoRotate = true end)
+	vZero(hrp)
+	hrp.CFrame = faceCF(hrp.Position)
+	pcall(function() hum.AutoRotate = true end)
 	if checkAbort() then return end
 	if (hrp.Position-destPos).Magnitude > 12 then abort("base_not_reached"); return end
 
@@ -1955,7 +1965,15 @@ pcall(function() hum.AutoRotate = true end)
 		hum  = char and char:FindFirstChildOfClass("Humanoid")
 		if not hrp then abort("no_char_after_swap"); return end
 		vZero(hrp); stabilize(hum); equipCarpet()
-		task.wait(math.max(0.05, tonumber(_G.SMKTPostCloneDelay) or 0.1))
+		local postDelay = math.max(0.15, tonumber(_G.SMKTPostCloneDelay) or 0.15)
+		task.wait(postDelay)
+		char = LP.Character
+		hrp  = char and char:FindFirstChild("HumanoidRootPart")
+		hum  = char and char:FindFirstChildOfClass("Humanoid")
+		if not hrp then abort("no_char_after_swap"); return end
+		if checkAbort() then return end
+		vZero(hrp); stabilize(hum)
+		task.wait(0.05)
 		if checkAbort() then return end
 		_G.TPStatus = "going_to_brainrot"
 		goToBrainrot(brainPos, selData)
@@ -1965,8 +1983,11 @@ pcall(function() hum.AutoRotate = true end)
 			_G.TPStatus = "done"
 		end
 	else
-		abort("clone_failed"); return
+		abort("clone_failed")
+		if _lagbackConn then _lagbackConn:Disconnect() end
+		return
 	end
+	if _lagbackConn then _lagbackConn:Disconnect() end
 end
 
 local function doVelocityTP()
