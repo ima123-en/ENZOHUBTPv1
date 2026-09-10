@@ -1446,32 +1446,40 @@ local function doClone(nearPos)
 		local char = LP.Character
 		local hrp  = char and char:FindFirstChild("HumanoidRootPart")
 		if not hrp then return end
-		local prePos = hrp.Position
-		local function swapped()
-			local c = LP.Character
-			local h = c and c:FindFirstChild("HumanoidRootPart")
-			if not h then return false end
-			return (h.Position - prePos).Magnitude > 3
-		end
+		local preChar = char
+		local prePos  = hrp.Position
+
 		local remote = getQuantumTeleportRemote()
 		if remote then
 			task.spawn(function() pcall(function() remote:FireServer() end) end)
 		end
 		task.spawn(function() pressSwapButton() end)
+
 		local t0 = os.clock()
-		while os.clock() - t0 < 1.2 do
-			if swapped() then
-				task.wait(0.05)
-				success = true
-				return
+		while os.clock() - t0 < 3.5 do
+			local c = LP.Character
+			if c then
+				local h = c:FindFirstChild("HumanoidRootPart")
+				if h then
+					local charChanged = (c ~= preChar)
+					local posMoved = (h.Position - prePos).Magnitude > 2
+					if charChanged or posMoved then
+						task.wait(0.15)
+						success = true
+						return
+					end
+				end
 			end
 			RunService.Heartbeat:Wait()
+		end
+		if isAlive() then
+			task.wait(0.15)
+			success = true
 		end
 	end)
 	_G._UnifiedIsCloning = false
 	return success
 end
-
 local function getPrioritySelected()
 	local PS = getgenv and getgenv().PrioritySystem
 	if PS then
@@ -1877,7 +1885,6 @@ local function _doVelocityTPInner()
 		_G.SMKTFireGrapple(destPos)
 		task.wait((tonumber(_G.SMKTGrappleWaitMs) or 200)/1000)
 	end
-	equipCarpet()
 
 	if checkAbort() then return end
 	_G.TPStatus = "traveling_to_base"
@@ -1960,22 +1967,36 @@ local function _doVelocityTPInner()
 
 	if cloneOk then
 		_G.TPStatus = "post_clone_stabilize"
-		char = LP.Character
-		hrp  = char and char:FindFirstChild("HumanoidRootPart")
-		hum  = char and char:FindFirstChildOfClass("Humanoid")
-		if not hrp then abort("no_char_after_swap"); return end
-		vZero(hrp); stabilize(hum); equipCarpet()
-		local postDelay = math.max(0.15, tonumber(_G.SMKTPostCloneDelay) or 0.15)
-		task.wait(postDelay)
-		char = LP.Character
-		hrp  = char and char:FindFirstChild("HumanoidRootPart")
-		hum  = char and char:FindFirstChildOfClass("Humanoid")
+		local t0 = os.clock()
+		repeat
+			RunService.Heartbeat:Wait()
+			char = LP.Character
+			hrp  = char and char:FindFirstChild("HumanoidRootPart")
+			hum  = char and char:FindFirstChildOfClass("Humanoid")
+		until (hrp and hum and hum.Health > 0) or os.clock() - t0 > 3
 		if not hrp then abort("no_char_after_swap"); return end
 		if checkAbort() then return end
-		vZero(hrp); stabilize(hum)
-		task.wait(0.05)
+		vZero(hrp)
+		stabilize(hum)
+		task.wait(math.max(0.1, tonumber(_G.SMKTPostCloneDelay) or 0.1))
+		if checkAbort() then return end
+		char = LP.Character
+		hrp  = char and char:FindFirstChild("HumanoidRootPart")
+		hum  = char and char:FindFirstChildOfClass("Humanoid")
+		if not hrp then abort("no_char_after_swap"); return end
+		vZero(hrp)
+		stabilize(hum)
 		if checkAbort() then return end
 		_G.TPStatus = "going_to_brainrot"
+		local t1 = os.clock()
+		repeat
+			RunService.Heartbeat:Wait()
+			char = LP.Character
+			hrp  = char and char:FindFirstChild("HumanoidRootPart")
+			hum  = char and char:FindFirstChildOfClass("Humanoid")
+		until (hrp and hum and hum.Health > 0) or os.clock() - t1 > 2
+		if not hrp or not hum then abort("no_char_after_swap"); return end
+		task.wait(0.05)
 		goToBrainrot(brainPos, selData)
 		if _G.TPStatus ~= "lagback_detected_aborted"
 			and _G.TPStatus ~= "player_died_aborted"
