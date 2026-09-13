@@ -52,7 +52,6 @@ _G.SMKTPathCell           = 4
 _G.SMKTPathRadius         = 2.5
 _G.SMKTPathHeight         = 5
 _G.SMKTPathPad            = 40
-_G.SMKTPathBudget         = 0.12
 _G.SMKTRowBoxX            = 26
 _G.SMKTRowBoxZ            = 30
 _G.SMKTRowLane            = 30
@@ -290,19 +289,6 @@ local function stabilize(hum)
 	end)
 end
 
-local function stabilizeSoft(hum)
-	if not hum or hum.Health <= 0 then return end
-	pcall(function()
-		hum.PlatformStand = false
-		local s = hum:GetState()
-		if s == Enum.HumanoidStateType.FallingDown
-			or s == Enum.HumanoidStateType.Ragdoll
-			or s == Enum.HumanoidStateType.PlatformStanding then
-			hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-		end
-	end)
-end
-
 local function _pingMs()
 	local ok, v = pcall(function()
 		return Players.LocalPlayer:GetNetworkPing() * 1000
@@ -328,6 +314,24 @@ local _SKIP_NAME = { ["DeliveryHitbox"]=true, ["StealHitbox"]=true,
 	["Spawn"]=true, ["MainRoot"]=true, ["SecondFloor"]=true, ["ThirdFloor"]=true, ["Slope"]=true,
 	["Laser"]=true, ["LaserHitbox"]=true, ["Lasers"]=true, ["LaserBeam"]=true }
 
+local SPECIAL_OBSTACLES = {
+	["CraftingMachine"] = true,
+	["Shop"] = true,
+	["TradePlazaPortal"] = true,
+	["CrystalSpinWheel"] = true,
+	["RobuxShop"] = true,
+}
+
+local function _isSpecialObstacle(inst)
+	if not inst then return false end
+	local curr = inst
+	while curr and curr ~= workspace do
+		if SPECIAL_OBSTACLES[curr.Name] then return true end
+		curr = curr.Parent
+	end
+	return false
+end
+
 local function _isLaser(inst)
 	local n = inst.Name
 	if n:find("Laser") then return true end
@@ -338,6 +342,7 @@ end
 
 local function _blocks(inst)
 	if not inst then return false end
+	if _isSpecialObstacle(inst) then return true end
 	if _SKIP_NAME[inst.Name] or _isLaser(inst) then return false end
 	if inst.CanCollide then return true end
 	if _STRUCT[inst.Name] then return true end
@@ -348,6 +353,7 @@ end
 
 local function _blocksWide(inst)
 	if not inst then return false end
+	if _isSpecialObstacle(inst) then return true end
 	if _SKIP_NAME[inst.Name] or _isLaser(inst) then return false end
 	if inst.CanCollide then return true end
 	if _STRUCT[inst.Name] then return true end
@@ -358,6 +364,7 @@ end
 
 local function _blocksMove(inst)
 	if not inst then return false end
+	if _isSpecialObstacle(inst) then return true end
 	if _SKIP_NAME[inst.Name] or _isLaser(inst) then return false end
 	return inst.CanCollide == true
 end
@@ -572,11 +579,14 @@ local voxelRoute = (function()
 		local sxz = _vxSz + _vxInflate
 		local vy = _vxHeight > _vxSz and _vxHeight or _vxSz
 		local vcy = cy - h + vy * 0.5
-		local parts = workspace:GetPartBoundsInBox(CFrame.new(cx, vcy, cz), Vector3.new(sxz, vy, sxz), _vxOverlap)
-		local solid = false
-		for _, p in ipairs(parts) do
-			if not _isLaser(p) then solid = true; break end
-		end
+local parts = workspace:GetPartBoundsInBox(CFrame.new(cx, vcy, cz), Vector3.new(sxz, vy, sxz), _vxOverlap)
+local solid = false
+for _, p in ipairs(parts) do
+    if _isSpecialObstacle(p) then solid = true; break end
+    if _isLaser(p) then continue end
+    if _SKIP_NAME[p.Name] then continue end
+    solid = true; break
+end
 		_vxSolid[k] = solid
 		return solid
 	end
@@ -1382,26 +1392,6 @@ local function placeCloneOnly(nearPos)
 	return findClone() ~= nil
 end
 
-local function manualCloneTeleport()
-	local clone = findClone()
-	if not clone then return false end
-	local cloneHrp = clone:FindFirstChild("HumanoidRootPart")
-		or clone:FindFirstChildWhichIsA("BasePart")
-	if not cloneHrp then return false end
-	local char = LP.Character
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-	local hum  = char and char:FindFirstChildOfClass("Humanoid")
-	if not hrp then return false end
-	local targetCF = cloneHrp.CFrame + Vector3.new(0, 2.5, 0)
-	for _ = 1, 3 do
-		hrp.CFrame = targetCF
-		vZero(hrp)
-		if hum then stabilize(hum) end
-		RunService.Heartbeat:Wait()
-	end
-	return true
-end
-
 local function pressSwapButton()
 	local btn = PlayerGui:FindFirstChild("ToolsFrames")
 		and PlayerGui.ToolsFrames:FindFirstChild("QuantumCloner")
@@ -1480,6 +1470,7 @@ local function doClone(nearPos)
 	_G._UnifiedIsCloning = false
 	return success
 end
+
 local function getPrioritySelected()
 	local PS = getgenv and getgenv().PrioritySystem
 	if PS then
@@ -1599,7 +1590,8 @@ local function smktVelMove(hrp, waypoints, speedOverride)
 		if hrp and hrp.Parent then vZero(hrp) end
 	end
 
-	local function replan()
+local function replan()
+		if _G.SMKTNoReplan then return false end
 		if replans >= maxReplan then return false end
 		replans += 1
 		local ok, r = pcall(computeRoute, hrp.Position, finalPos)
@@ -1714,6 +1706,8 @@ local function goToBrainrot(brainPos, selRef)
 	if not hrp or not hum then return end
 	equipCarpet(); vZero(hrp); stabilize(hum)
 
+	_G.SMKTNoReplan = true
+
 	local needsHover = (brainPos.Y > 20)
 		or (brainPos.Y >= 8.0 and brainPos.Y <= 11.0 and Config.TpSettings.TpFloor1WhenFloor2)
 
@@ -1727,43 +1721,76 @@ local function goToBrainrot(brainPos, selRef)
 		targetPos  = Vector3.new((brainPos - look*3).X, hrp.Position.Y, (brainPos - look*3).Z)
 	end
 
-	local mode = Config.TpSettings.TpToBrainrotMode or "Velocity"
-
-	if mode == "Walk" then
-		local route = computeRoute(hrp.Position, targetPos)
-		local stopMove, mvState = smktVelMove(hrp, route, _pingAdjustSpeed(tonumber(_G.SMKTGoSpeed) or 200))
-		local t0 = tick()
-		while tick()-t0 < 8 do
-			if not isAlive() then break end
-			if _G.TPStatus == "lagback_detected_aborted" then break end
-			if mvState.done then break end
-			if (hrp.Position-targetPos).Magnitude < 3 then break end
-			stabilize(hum); task.wait(0.02)
+	local _gtbSpeedMult = 1.0
+	local _gtbLastPos   = hrp.Position
+	local _gtbLastT     = os.clock()
+	local _gtbCurrentSpeed = _pingAdjustSpeed(tonumber(_G.SMKTGoSpeed) or 200)
+	local _gtbLagConn
+	_gtbLagConn = RunService.Heartbeat:Connect(function()
+		local c2 = LP.Character
+		local h2 = c2 and c2:FindFirstChild("HumanoidRootPart")
+		if not h2 then return end
+		local now = os.clock()
+		local pos2 = h2.Position
+		if (now - _gtbLastT) > 0.1 then
+			local moved = (pos2 - _gtbLastPos).Magnitude
+			local vel   = h2.AssemblyLinearVelocity.Magnitude
+			if moved > 8 and vel < 8 then
+				_gtbSpeedMult = math.max(0.3, _gtbSpeedMult * 0.90)
+				_gtbCurrentSpeed = math.floor(
+					_pingAdjustSpeed(tonumber(_G.SMKTGoSpeed) or 200) * _gtbSpeedMult
+				)
+				_G.SMKTGoSpeed       = _gtbCurrentSpeed
+				_G.SMKTBrainrotSpeed = _gtbCurrentSpeed
+			end
+			_gtbLastPos = pos2
+			_gtbLastT   = now
 		end
-		stopMove(); vZero(hrp)
+	end)
+
+	local stopMove, mvState = smktVelMove(hrp, {targetPos}, _gtbCurrentSpeed)
+	local t0 = tick()
+	while tick()-t0 < 8 do
+		if not isAlive() then break end
+		if _G.TPStatus == "lagback_detected_aborted" then break end
+		if mvState.done then break end
+		if (hrp.Position-targetPos).Magnitude < 3 then break end
+		if _gtbCurrentSpeed ~= (tonumber(_G.SMKTGoSpeed) or 200) then
+			stopMove()
+			if not isAlive() then break end
+			local c2 = LP.Character
+			local h2 = c2 and c2:FindFirstChild("HumanoidRootPart")
+			if not h2 then break end
+			hrp = h2
+			stopMove, mvState = smktVelMove(hrp, {targetPos}, _gtbCurrentSpeed)
+		end
+		stabilize(hum); task.wait(0.02)
 	end
+	stopMove()
+	if _gtbLagConn then _gtbLagConn:Disconnect() end
+	vZero(hrp)
+
+	_G.SMKTNoReplan = false
 
 	if not needsHover then
-		if mode ~= "Walk" then
-			for _ = 1, 2 do
-				if not isAlive() then return end
-				if LP:GetAttribute("Stealing") then return end
-				local c = LP.Character
-				local h = c and c:FindFirstChild("HumanoidRootPart")
-				if not h then return end
-				equipCarpet(); vZero(h)
-				local cf = h.CFrame
-				h.CFrame = CFrame.new(targetPos+Vector3.new(0,0.5,0)) *
-					CFrame.fromMatrix(Vector3.zero, cf.RightVector, cf.UpVector, cf.LookVector)
-				vZero(h); stabilize(hum); task.wait(0.3)
-			end
+		for _ = 1, 2 do
+			if not isAlive() then return end
+			if LP:GetAttribute("Stealing") then return end
+			local c = LP.Character
+			local h = c and c:FindFirstChild("HumanoidRootPart")
+			if not h then return end
+			equipCarpet(); vZero(h)
+			local cf = h.CFrame
+			h.CFrame = CFrame.new(targetPos+Vector3.new(0,0.5,0)) *
+				CFrame.fromMatrix(Vector3.zero, cf.RightVector, cf.UpVector, cf.LookVector)
+			vZero(h); stabilize(hum); task.wait(0.3)
 		end
 		return
 	end
 
 	local freezePos     = targetPos + Vector3.new(0, 1.5, 0)
 	local maxHoverTime  = 25
-	local t0            = os.clock()
+	local t0_hover      = os.clock()
 	local holdGain      = 8
 	local maxHoldSpeed  = 60
 	local snapDist      = 0.2
@@ -1799,7 +1826,7 @@ local function goToBrainrot(brainPos, selRef)
 		local stolen = false
 		if selRef and selRef.model and not selRef.model.Parent then stolen = true end
 		if not getPrioritySelected() then stolen = true end
-		if stolen or (os.clock() - t0) > maxHoverTime or dist > 35 then
+		if stolen or (os.clock() - t0_hover) > maxHoverTime or dist > 35 then
 			if conn then conn:Disconnect() end
 		end
 	end)
@@ -1834,34 +1861,46 @@ local function _doVelocityTPInner()
 	local _lastPos = nil
 	local _lastPosT = 0
 	local _lagbackConn
-	_lagbackConn = RunService.Heartbeat:Connect(function()
-		local char = LP.Character
-		local hrp = char and char:FindFirstChild("HumanoidRootPart")
-		if not hrp then return end
-		local now = os.clock()
-		local pos = hrp.Position
-		if _lastPos and (now - _lastPosT) > 0.1 then
-			local moved = (pos - _lastPos).Magnitude
-			local vel = hrp.AssemblyLinearVelocity.Magnitude
-			if moved > 8 and vel < 5 then
-				_lagbackSpeedMult = math.max(0.4, _lagbackSpeedMult * 0.9)
-				_G.TPVelocity = math.floor((_G.TPVelocity or 400) * 0.9)
+
+	local function setupLagbackDetector()
+		if _lagbackConn then _lagbackConn:Disconnect() end
+		_lagbackSpeedMult = 1.0
+		_lastPos = nil
+		_lastPosT = 0
+
+		_lagbackConn = RunService.Heartbeat:Connect(function()
+			local char = LP.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			if not hrp then return end
+			local now = os.clock()
+			local pos = hrp.Position
+			if _lastPos and (now - _lastPosT) > 0.08 then
+				local moved = (pos - _lastPos).Magnitude
+				local vel = hrp.AssemblyLinearVelocity.Magnitude
+				if moved > 10 and vel < 10 then
+					_lagbackSpeedMult = math.max(0.2, _lagbackSpeedMult * 0.9)
+					_G.TPVelocity = math.floor((Config.TpSettings.TpV2Speed or 400) * _lagbackSpeedMult)
+					_G.SMKTGoSpeed = math.floor((Config.TpSettings.WalkToBrainrotSpd or 200) * _lagbackSpeedMult)
+					_G.SMKTBrainrotSpeed = _G.SMKTGoSpeed
+				end
 			end
-		end
-		_lastPos = pos
-		_lastPosT = now
-	end)
+			_lastPos = pos
+			_lastPosT = now
+		end)
+	end
+
+	setupLagbackDetector()
 
 	local char = LP.Character
 	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
 	local hum  = char and char:FindFirstChildOfClass("Humanoid")
-	if not hrp or not hum then abort("no_char"); return end
+	if not hrp or not hum then abort("no_char"); if _lagbackConn then _lagbackConn:Disconnect() end; return end
 	vZero(hrp); stabilize(hum)
 
 	local selData  = getPrioritySelected()
-	if not selData then abort("no_priority_selection"); return end
+	if not selData then abort("no_priority_selection"); if _lagbackConn then _lagbackConn:Disconnect() end; return end
 	local brainPos = getBrainrotPos(selData)
-	if not brainPos then abort("no_pet_position"); return end
+	if not brainPos then abort("no_pet_position"); if _lagbackConn then _lagbackConn:Disconnect() end; return end
 
 	playPrioritySound()
 
@@ -1878,7 +1917,7 @@ local function _doVelocityTPInner()
 		or  (tonumber(Config.TpSettings.TpV2Speed)      or 400))
 	_G.TPVelocity = baseSpeed
 
-	if checkAbort() then return end
+	if checkAbort() then if _lagbackConn then _lagbackConn:Disconnect() end; return end
 
 	if useGrapple then
 		_G.SMKTIsTeleporting = true
@@ -1886,7 +1925,7 @@ local function _doVelocityTPInner()
 		task.wait((tonumber(_G.SMKTGrappleWaitMs) or 200)/1000)
 	end
 
-	if checkAbort() then return end
+	if checkAbort() then if _lagbackConn then _lagbackConn:Disconnect() end; return end
 	_G.TPStatus = "traveling_to_base"
 
 	local route
@@ -1902,10 +1941,11 @@ local function _doVelocityTPInner()
 		route = computeRoute(hrp.Position, destPos, facingDir)
 	end
 
-	local stopMove, mvState = smktVelMove(hrp, route, math.floor(baseSpeed * _lagbackSpeedMult))	local t0 = tick()
+	local stopMove, mvState = smktVelMove(hrp, route, math.floor(baseSpeed * _lagbackSpeedMult))
+	local t0 = tick()
 	local finalArrive = tonumber(_G.SMKTFinalArrive) or 2.5
 	while tick()-t0 < 10 do
-		if checkAbort() then stopMove(); return end
+		if checkAbort() then stopMove(); if _lagbackConn then _lagbackConn:Disconnect() end; return end
 		if mvState.done then break end
 		if (hrp.Position-destPos).Magnitude < finalArrive then break end
 		stabilize(hum); task.wait(0.02)
@@ -1916,8 +1956,8 @@ local function _doVelocityTPInner()
 	if _G.TPStatus == "stall_aborted" and (hrp.Position-destPos).Magnitude <= snapRange then
 		_G.TPStatus = "traveling_to_base"
 	end
-	if checkAbort() then return end
-	if (hrp.Position-destPos).Magnitude > snapRange then abort("base_not_reached"); return end
+	if checkAbort() then if _lagbackConn then _lagbackConn:Disconnect() end; return end
+	if (hrp.Position-destPos).Magnitude > snapRange then abort("base_not_reached"); if _lagbackConn then _lagbackConn:Disconnect() end; return end
 
 	_G.TPStatus = "at_base_fixing_position"
 
@@ -1927,7 +1967,6 @@ local function _doVelocityTPInner()
 	vZero(hrp)
 	hrp.CFrame = faceCF(destPos)
 
--- NEU: Längerer Hold + Physik komplett einfrieren + Lagback-Guard
 	local frozenCF = faceCF(destPos)
 	hrp.CFrame = frozenCF
 	vZero(hrp)
@@ -1951,42 +1990,42 @@ local function _doVelocityTPInner()
 	if leftDir.Magnitude < 0.01 then leftDir = Vector3.new(0, 0, 1) end
 	leftDir = leftDir.Unit
 	local driftSpd = tonumber(_G.SMKTFixDriftSpeed) or 6
--- NEU: Micro-Drift direkt in Fahrtrichtung (ins Base rein), nicht seitwärts
+
 	vZero(hrp)
 	hrp.CFrame = faceCF(hrp.Position)
 	pcall(function() hum.AutoRotate = true end)
-	if checkAbort() then return end
-	if (hrp.Position-destPos).Magnitude > 12 then abort("base_not_reached"); return end
+	if checkAbort() then if _lagbackConn then _lagbackConn:Disconnect() end; return end
+	if (hrp.Position-destPos).Magnitude > 12 then abort("base_not_reached"); if _lagbackConn then _lagbackConn:Disconnect() end; return end
 
 	_G.TPStatus = "cloning"
 	task.wait(math.clamp(Config.TpSettings.CloneDelay or 0.03, 0.01, 1))
-	if checkAbort() then return end
+	if checkAbort() then if _lagbackConn then _lagbackConn:Disconnect() end; return end
 
 	local cloneOk = doClone(destPos)
-	if checkAbort() then return end
+	if checkAbort() then if _lagbackConn then _lagbackConn:Disconnect() end; return end
 
 	if cloneOk then
 		_G.TPStatus = "post_clone_stabilize"
-		local t0 = os.clock()
+		local t0_clone = os.clock()
 		repeat
 			RunService.Heartbeat:Wait()
 			char = LP.Character
 			hrp  = char and char:FindFirstChild("HumanoidRootPart")
 			hum  = char and char:FindFirstChildOfClass("Humanoid")
-		until (hrp and hum and hum.Health > 0) or os.clock() - t0 > 3
-		if not hrp then abort("no_char_after_swap"); return end
-		if checkAbort() then return end
+		until (hrp and hum and hum.Health > 0) or os.clock() - t0_clone > 3
+		if not hrp then abort("no_char_after_swap"); if _lagbackConn then _lagbackConn:Disconnect() end; return end
+		if checkAbort() then if _lagbackConn then _lagbackConn:Disconnect() end; return end
 		vZero(hrp)
 		stabilize(hum)
 		task.wait(math.max(0.1, tonumber(_G.SMKTPostCloneDelay) or 0.1))
-		if checkAbort() then return end
+		if checkAbort() then if _lagbackConn then _lagbackConn:Disconnect() end; return end
 		char = LP.Character
 		hrp  = char and char:FindFirstChild("HumanoidRootPart")
 		hum  = char and char:FindFirstChildOfClass("Humanoid")
-		if not hrp then abort("no_char_after_swap"); return end
+		if not hrp then abort("no_char_after_swap"); if _lagbackConn then _lagbackConn:Disconnect() end; return end
 		vZero(hrp)
 		stabilize(hum)
-		if checkAbort() then return end
+		if checkAbort() then if _lagbackConn then _lagbackConn:Disconnect() end; return end
 		_G.TPStatus = "going_to_brainrot"
 		local t1 = os.clock()
 		repeat
@@ -1995,7 +2034,7 @@ local function _doVelocityTPInner()
 			hrp  = char and char:FindFirstChild("HumanoidRootPart")
 			hum  = char and char:FindFirstChildOfClass("Humanoid")
 		until (hrp and hum and hum.Health > 0) or os.clock() - t1 > 2
-		if not hrp or not hum then abort("no_char_after_swap"); return end
+		if not hrp or not hum then abort("no_char_after_swap"); if _lagbackConn then _lagbackConn:Disconnect() end; return end
 		task.wait(0.05)
 		goToBrainrot(brainPos, selData)
 		if _G.TPStatus ~= "lagback_detected_aborted"
