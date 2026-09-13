@@ -1707,6 +1707,15 @@ local function goToBrainrot(brainPos, selRef)
 	equipCarpet(); vZero(hrp); stabilize(hum)
 
 	_G.SMKTNoReplan = true
+	_G.SMKTLookahead = false
+	local _prevDirect = _G.SMKTDirect
+	_G.SMKTDirect = false
+
+	local char = LP.Character
+	local hrp2 = char and char:FindFirstChild("HumanoidRootPart")
+	if hrp2 then hrp = hrp2 end
+	local hum2 = char and char:FindFirstChildOfClass("Humanoid")
+	if hum2 then hum = hum2 end
 
 	local needsHover = (brainPos.Y > 20)
 		or (brainPos.Y >= 8.0 and brainPos.Y <= 11.0 and Config.TpSettings.TpFloor1WhenFloor2)
@@ -1771,6 +1780,8 @@ local function goToBrainrot(brainPos, selRef)
 	vZero(hrp)
 
 	_G.SMKTNoReplan = false
+	_G.SMKTLookahead = true
+	_G.SMKTDirect = _prevDirect
 
 	if not needsHover then
 		for _ = 1, 2 do
