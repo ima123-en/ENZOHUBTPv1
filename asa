@@ -1679,9 +1679,11 @@ local function replan()
 					spd = math.min(spd, cornerSpd)
 				end
 			end
-			if isLast and mag < 14 then
-				local closeSpd = tonumber(_G.SMKTCloseSpeed) or 80
-				spd = math.min(spd, math.max(closeSpd, mag * 12))
+			-- FIX: Bereits ab 45 Studs vor der Base auf CloseSpeed abbremsen!
+			if isLast and mag < 45 then
+				local closeSpd = tonumber(Config.TpSettings.CloseSpeed) or tonumber(_G.SMKTCloseSpeed) or 80
+				local factor = math.clamp(mag / 45, 0, 1)
+				spd = math.max(closeSpd, baseSpeed * factor)
 			end
 			local isJumpingNow = false
 			if jumpEnabled and hum and (now - lastJumpT) >= jumpInterval then
@@ -1954,6 +1956,14 @@ local function _doVelocityTPInner()
 	local baseSpeed  = _pingAdjustSpeed(useGrapple
 		and (tonumber(Config.TpSettings.TpGrappleSpeed) or 400)
 		or  (tonumber(Config.TpSettings.TpV2Speed)      or 400))
+
+	-- FIX: Wenn die Ziel-Base nah ist (< 140 Studs, z.B. Nachbar-Base), nutze CloseSpeed!
+	local distToBase = (hrp.Position - destPos).Magnitude
+	local closeSpd = tonumber(Config.TpSettings.CloseSpeed) or tonumber(_G.SMKTCloseSpeed) or 80
+	if distToBase <= 140 then
+		baseSpeed = math.min(baseSpeed, closeSpd)
+	end
+
 	_G.TPVelocity = baseSpeed
 
 	if checkAbort() then if _lagbackConn then _lagbackConn:Disconnect() end; return end
