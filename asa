@@ -61,7 +61,7 @@ _G.SMKTGrappleWaitMs      = 200
 _G.SMKTStrictSweep        = true
 _G.SMKTBrainrotSpeed      = _G.SMKTBrainrotSpeed or 200
 _G.SMKTJumpRefreshEnabled  = true
-_G.SMKTJumpRefreshInterval = 0.5
+_G.SMKTJumpRefreshInterval = 0.3
 _G.SMKTLookahead          = true
 _G.SMKTCornerSpeed        = 140
 _G.SMKTMaxReplans         = 2
@@ -282,8 +282,7 @@ local function stabilize(hum)
 		local s = hum:GetState()
 		if s == Enum.HumanoidStateType.FallingDown
 			or s == Enum.HumanoidStateType.Ragdoll
-			or s == Enum.HumanoidStateType.PlatformStanding
-			or s == Enum.HumanoidStateType.Freefall then
+			or s == Enum.HumanoidStateType.PlatformStanding then
 			hum:ChangeState(Enum.HumanoidStateType.Running)
 		end
 	end)
@@ -1684,14 +1683,43 @@ local function replan()
 				local closeSpd = tonumber(_G.SMKTCloseSpeed) or 80
 				spd = math.min(spd, math.max(closeSpd, mag * 12))
 			end
+			local isJumpingNow = false
 			if jumpEnabled and hum and (now - lastJumpT) >= jumpInterval then
 				lastJumpT = now
+				isJumpingNow = true
 				pcall(function()
-					hum:ChangeState(Enum.HumanoidStateType.Jumping)
 					hum.Jump = true
+					hum:ChangeState(Enum.HumanoidStateType.Jumping)
 				end)
 			end
-			hrp.AssemblyLinearVelocity = dir * spd
+
+			-- 1. Horizontale Vorwärtsbewegung: Immer zu 100% voller Speed (kein Abbremsen!)
+			local hDir = Vector3.new(diff.X, 0, diff.Z)
+			local hUnit = (hDir.Magnitude > 0.001) and hDir.Unit or Vector3.zero
+
+			-- 2. Vertikale Bewegung (Y): Flacher Speed-Hop, der die Flugbahn nicht zerstört
+			local currentY = hrp.AssemblyLinearVelocity.Y
+			local yVel
+
+			if diff.Y > 3 then
+				-- Wenn wir aktiv nach oben klettern müssen:
+				yVel = _climbCap(hrp, target.Y)
+			elseif diff.Y < -3 then
+				-- Wenn wir nach unten müssen:
+				yVel = math.clamp(diff.Y * 8, -60, 0)
+			else
+				-- Auf gerader Strecke: Nur ein leichter Hopser beim Auslösen
+				if isJumpingNow then
+					yVel = 26 -- Flacher Impuls: hebt vom Boden ab, ohne in die Decke zu fliegen
+				else
+					-- Lässt den Sprung sanft über die Schwerkraft ausklingen
+					yVel = math.clamp(currentY, -40, 26)
+				end
+			end
+
+			-- X und Z behalten exakt 'spd' (z.B. 400), Y übernimmt den leichten Sprung
+			hrp.AssemblyLinearVelocity = Vector3.new(hUnit.X * spd, yVel, hUnit.Z * spd)
+
 			stabilize(hum)
 		end
 	end)
