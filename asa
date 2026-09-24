@@ -1740,7 +1740,7 @@ local function doVelocityTP()
         local _mainSpeed = math.clamp(tonumber(_G.NeegyCruise) or 480, 200, 750)
         local distToBase = (hrp.Position - destPos).Magnitude
         local closeSpd = tonumber(CONFIG.CloseSpeed) or 80
-        if distToBase <= 140 then
+        if distToBase <= 70 then
             _mainSpeed = math.min(_mainSpeed, closeSpd)
         end
 
