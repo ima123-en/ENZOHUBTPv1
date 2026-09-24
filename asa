@@ -297,13 +297,17 @@ local function equipToolByChoice()
     if not char then return nil end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return nil end
-    if realName then
+    
+    -- Wenn Grapple gewählt ist, wollen wir zum Fliegen trotzdem den Carpet!
+    if realName and choice ~= "Grapple" then
         local t = findTool(realName)
         if t and t:IsA("Tool") then
             if t.Parent ~= char then pcall(function() hum:EquipTool(t) end) end
             return realName
         end
     end
+    
+    -- Sucht nach Flying Carpet, Sleigh, Wings etc.
     for _, n in ipairs(CARPET_NAMES) do
         local t = findTool(n)
         if t and t:IsA("Tool") then
