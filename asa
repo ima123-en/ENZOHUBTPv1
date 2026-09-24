@@ -1490,25 +1490,57 @@ local function goToBrainrot(brainPos, selRef)
     end
     stopMove()
     if _gtbLagConn then _gtbLagConn:Disconnect() end
-    vZero(hrp)
+    
+    -- Stoppt alle Körperteile komplett (verhindert den Fling)
+    local function freezeCompletely(c, h, hm)
+        if not c or not h or not hm then return end
+        pcall(function()
+            hm.Sit = false
+            hm.PlatformStand = false
+            hm:ChangeState(Enum.HumanoidStateType.Running)
+            
+            -- Richtet den Charakter kerzengerade auf (kein Schrägstand/Umfallen)
+            local lv = h.CFrame.LookVector
+            local flatLook = Vector3.new(lv.X, 0, lv.Z)
+            if flatLook.Magnitude > 0.01 then
+                h.CFrame = CFrame.lookAt(h.Position, h.Position + flatLook.Unit)
+            end
+            
+            for _, p in ipairs(c:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    p.AssemblyLinearVelocity = Vector3.zero
+                    p.AssemblyAngularVelocity = Vector3.zero
+                end
+            end
+        end)
+    end
+
+    freezeCompletely(LP.Character, hrp, hum)
     _G.SMKTNoReplan = false
     _G.SMKTLookahead = true
     _G.SMKTDirect = _prevDirect
+
     if not needsHover then
         for _ = 1, 2 do
             if not isAlive() then return end
             if LP:GetAttribute("Stealing") then return end
             local c = LP.Character
             local h = c and c:FindFirstChild("HumanoidRootPart")
-            if not h then return end
+            local hm = c and c:FindFirstChildOfClass("Humanoid")
+            if not h or not hm then return end
+            
             equipCarpet()
-            vZero(h)
-            local cf = h.CFrame
-            h.CFrame = CFrame.new(targetPos + Vector3.new(0, 0.5, 0)) *
-                CFrame.fromMatrix(Vector3.zero, cf.RightVector, cf.UpVector, cf.LookVector)
-            vZero(h)
-            stabilize(hum)
-            task.wait(0.3)
+            freezeCompletely(c, h, hm)
+            
+            local lv = h.CFrame.LookVector
+            local flatLook = Vector3.new(lv.X, 0, lv.Z).Unit
+            
+            -- 1.2 Studs über den Boden setzen, damit er nicht in den Boden glitcht und flinged:
+            h.CFrame = CFrame.lookAt(Vector3.new(targetPos.X, targetPos.Y + 1.2, targetPos.Z), Vector3.new(targetPos.X, targetPos.Y + 1.2, targetPos.Z) + flatLook)
+            
+            freezeCompletely(c, h, hm)
+            stabilize(hm)
+            task.wait(0.2)
         end
         return
     end
