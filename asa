@@ -1304,8 +1304,8 @@ local function smktVelMove(hrp, waypoints, speedOverride)
             local hUnit = (hDir.Magnitude > 0.001) and hDir.Unit or Vector3.zero
             local currentY = hrp.AssemblyLinearVelocity.Y
             local yVel
-            if diff.Y > 3 then yVel = _climbCap()
-            elseif diff.Y < -3 then yVel = math.clamp(diff.Y * 8, -60, 0)
+            if diff.Y > 1.5 then yVel = math.clamp(diff.Y * 15, 15, _climbCap())
+            elseif diff.Y < -1.5 then yVel = math.clamp(diff.Y * 8, -60, 0)
             else
                 if isJumpingNow then yVel = 26
                 else yVel = math.clamp(currentY, -40, 26) end
@@ -1434,6 +1434,12 @@ local function goToBrainrot(brainPos, selRef)
     else
         local look = hrp.CFrame.LookVector
         targetPos = Vector3.new((brainPos - look * 3).X, hrp.Position.Y, (brainPos - look * 3).Z)
+    end
+    targetPos = targetPos + Vector3.new(0, 1, 0)
+    if hrp and hrp.Parent then
+        pcall(function()
+            hrp.CFrame = hrp.CFrame + Vector3.new(0, 1, 0)
+        end)
     end
     local _gtbSpeedMult = 1.0
     local _gtbLastPos = hrp.Position
@@ -1740,7 +1746,7 @@ local function doVelocityTP()
         local _mainSpeed = math.clamp(tonumber(_G.NeegyCruise) or 480, 200, 750)
         local distToBase = (hrp.Position - destPos).Magnitude
         local closeSpd = tonumber(CONFIG.CloseSpeed) or 80
-        if distToBase <= 70 then
+        if distToBase <= 85 then
             _mainSpeed = math.min(_mainSpeed, closeSpd)
         end
 
